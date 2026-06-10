@@ -77,6 +77,7 @@ agentburn --agent hermes --db /path/to/state.db
 agentburn why                    # behavioral forensics: loops, retry storms, idle heartbeats
 agentburn why --source telegram  # decompose ONE source: functions called, errors, loops
 agentburn --source cron          # cost report for one source only
+agentburn explain --model llama3.1   # LLM reads the numbers back to you (local by default)
 agentburn --night 23-7           # custom overnight window (local time)
 agentburn --budget-month 50 --fail-over   # sentinel for cron/CI
 agentburn --json                 # machine-readable, pipe it anywhere
@@ -121,6 +122,16 @@ where it burns: cron 79% · cli 9% · telegram 7% · subagent 5%
 ```
 
 Observations with numbers, not verdicts; only tool names, truncated argument keys and counters — message content never leaves the machine (and never enters the report).
+
+**🧠 `agentburn explain` — LLM interpretation, local-first.** The numbers, read back to you in plain language with ranked actions:
+
+```bash
+agentburn explain --model llama3.1                      # local ollama — nothing leaves the machine
+agentburn explain --llm https://openrouter.ai/api/v1 \
+  --model deepseek/deepseek-chat --yes-remote --lang ru # remote: explicit opt-in only
+```
+
+Privacy rules are hard-coded: the default endpoint is localhost (ollama / LM Studio); a remote endpoint requires `--yes-remote` and receives a **redacted** summary only — session titles become `session-N`, file paths shrink to basenames, message content is never in the payload to begin with. Works with any OpenAI-compatible API, zero new dependencies. (Yes — a cost profiler spending ~3K tokens to explain costs. The payload is compact and the answer capped; the irony is acknowledged.)
 
 **🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
 

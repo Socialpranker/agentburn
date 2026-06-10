@@ -482,6 +482,64 @@ def main():
     ok("report --source: totals are the slice only",
        sj["total"]["sessions"] == 1 and abs(sj["total"]["cost"] - 3.0) < 1e-6)
 
+    print("explain (LLM, stub server):")
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    captured = {}
+
+    class Stub(BaseHTTPRequestHandler):
+        def do_POST(self):
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            captured["body"] = body
+            captured["auth"] = self.headers.get("Authorization", "")
+            resp = json.dumps({"choices": [{"message": {"content": "STUB-ANALYSIS: cron dominates."}}]})
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(resp.encode())
+
+        def log_message(self, *a):
+            pass
+
+    srv = HTTPServer(("127.0.0.1", 0), Stub)
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    r_ex = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
+                           "--db", env_db, "--llm", f"http://127.0.0.1:{port}/v1",
+                           "--model", "test-model", "--no-color"],
+                          capture_output=True, text=True)
+    ok("explain: local endpoint works end-to-end",
+       r_ex.returncode == 0 and "STUB-ANALYSIS" in r_ex.stdout and "nothing left this machine" in r_ex.stdout)
+    content = captured["body"]["messages"][1]["content"]
+    ok("explain: payload carries report + why", '"report"' in content and '"agentburn_why"' in content)
+    ok("explain: local payload NOT redacted (titles intact)", "refactor" in content)
+    ok("explain: model + system prompt present",
+       captured["body"]["model"] == "test-model"
+       and "cost analyst" in captured["body"]["messages"][0]["content"])
+
+    r_rem = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
+                            "--db", env_db, "--llm", "http://example.com/v1", "--model", "m"],
+                           capture_output=True, text=True)
+    ok("explain: remote refused without --yes-remote",
+       r_rem.returncode == 2 and "--yes-remote" in r_rem.stderr)
+
+    from agentburn.llm import redact as _redact
+    red = _redact({"report": {"subagent_rollups": [{"title": "secret task name"}]},
+                   "why": {"rereads": [{"session": "secret task name", "arg": "/home/u/proj/big.md"}],
+                           "storms": [], "failure_cost": {"examples": ["secret task name"]},
+                           "reasoning_heavy": []}})
+    s = json.dumps(red)
+    ok("redact: titles → session-N, paths → basenames",
+       "secret task name" not in s and "session-1" in s and '"big.md"' in s and "/home/" not in s)
+
+    r_nomodel = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
+                                "--db", env_db, "--llm", f"http://127.0.0.1:{port}/v1"],
+                               capture_output=True, text=True)
+    ok("explain: missing --model is a clear error", r_nomodel.returncode == 2 and "--model" in r_nomodel.stderr)
+    srv.shutdown()
+
     print(f"\nAll {PASSED} checks passed.")
 
 

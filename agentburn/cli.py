@@ -42,6 +42,7 @@ RECIPES = """examples:
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
   agentburn --save-baseline          snapshot → optimize config → agentburn --compare
+  agentburn explain --model llama3.1       plain-language interpretation via LOCAL llm (ollama)
   agentburn doctor                   accounting health + ready-to-paste upstream bug report
   agentburn --budget-night 5 --fail-over   cron guard: exit 1 when night burn exceeds $5/mo
 """
@@ -54,9 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=RECIPES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why"], default="report",
-                    help="report (default) · why (behavioral forensics: loops, storms, idle heartbeats, "
-                         "failure burn) · doctor (accounting health)")
+    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why", "explain"], default="report",
+                    help="report (default) · why (behavioral forensics) · explain (LLM interpretation, "
+                         "local by default) · doctor (accounting health)")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -72,6 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--save-baseline", action="store_true", help="save current pace as the optimization baseline")
     ap.add_argument("--compare", action="store_true", help="compare current pace against the saved baseline")
     ap.add_argument("--baseline-file", default=None, help="override baseline location (default ~/.agentburn/baseline.json)")
+    ap.add_argument("--llm", default=None, metavar="URL",
+                    help="explain: OpenAI-compatible endpoint (default: local ollama at localhost:11434)")
+    ap.add_argument("--model", default=None, help="explain: model name (or env AGENTBURN_LLM_MODEL)")
+    ap.add_argument("--lang", default="en", help="explain: answer language (default en)")
+    ap.add_argument("--yes-remote", action="store_true",
+                    help="explain: allow a non-localhost endpoint (sends a REDACTED summary)")
     ap.add_argument("--budget-month", type=float, default=None, metavar="USD",
                     help="sentinel: warn when the monthly pace exceeds this")
     ap.add_argument("--budget-night", type=float, default=None, metavar="USD",
@@ -150,7 +157,8 @@ def main(argv=None) -> int:
         args.days = 7
     color = sys.stdout.isatty() and not args.no_color and _ansi_ok()
 
-    single_modes = args.command == "doctor" or args.share or args.save_baseline or args.compare
+    single_modes = (args.command in ("doctor", "explain")
+                    or args.share or args.save_baseline or args.compare)
     # `why`, like `report`, runs across every detected agent
     found = pick_agents(args)
     if single_modes:
@@ -169,6 +177,46 @@ def main(argv=None) -> int:
             from .doctor import render_doctor
 
             print(render_doctor(load(found[0]), color=color))
+            return 0
+
+        if args.command == "explain":
+            import json as _json
+
+            from . import llm
+            from .behavior import analyze_behavior, behavior_json
+
+            snap = load(found[0])
+            a = analyze(snap, night_window=args.night)
+            payload = {
+                "report": _json.loads(render_json(a, recommend(a))),
+                "why": behavior_json(analyze_behavior(snap)),
+            }
+            base, model, key, local = llm.resolve_endpoint(args.llm, args.model)
+            if not model:
+                print("agentburn explain: pass --model (e.g. --model llama3.1 for ollama, "
+                      "or any model on your OpenAI-compatible endpoint).", file=sys.stderr)
+                return 2
+            if not local:
+                if not args.yes_remote:
+                    print(f"agentburn explain: {base} is not localhost. Re-run with --yes-remote "
+                          "to send a REDACTED summary (titles/paths stripped), or point --llm at "
+                          "a local model to keep everything on this machine.", file=sys.stderr)
+                    return 2
+                payload = llm.redact(payload)
+                print(f"⚠ sending a redacted summary to {base}", file=sys.stderr)
+            try:
+                answer = llm.interpret(payload, base, model, key, lang=args.lang)
+            except RuntimeError as e:
+                print(f"agentburn explain: {e}", file=sys.stderr)
+                return 2
+            dim = (lambda s: f"\033[2m{s}\033[0m") if color else (lambda s: s)
+            print()
+            print(("\033[1m" if color else "") + f"🧠 agentburn explain — {a.agent}"
+                  + ("\033[0m" if color else ""))
+            print(dim(f"   {model} @ {base} · {'local — nothing left this machine' if local else 'remote — redacted summary sent'}"))
+            print()
+            print(answer)
+            print()
             return 0
 
         if args.command == "why":
