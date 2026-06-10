@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="508" viewBox="0 0 760 508" role="img" aria-label="agentburn animated demo">
+<style>
+  @keyframes k57 { 0%,0.00% { opacity:0;  } 3.75% { opacity:1;  } 95.00% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  .k57 { opacity:0; animation: k57 12.0s linear infinite; }
+  @keyframes k58 { 0%,1.67% { opacity:0;  } 2.08% { opacity:1;  } 95.00% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  @keyframes k59 { 0%,1.67% { clip-path: inset(0 100% 0 0); } 10.83%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k59 { animation: k59 12.0s steps(15,end) infinite; }
+  .k58 { opacity:0; animation: k58 12.0s linear infinite; }
+  @keyframes k60 { 0%,13.33% { opacity:0; transform: translateY(5px); } 17.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k60 { opacity:0; animation: k60 12.0s linear infinite; }
+  @keyframes k61 { 0%,20.00% { opacity:0; transform: translateY(5px); } 23.75% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k61 { opacity:0; animation: k61 12.0s linear infinite; }
+  @keyframes k62 { 0%,36.67% { opacity:0; transform: translateY(5px); } 40.42% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k62 { opacity:0; animation: k62 12.0s linear infinite; }
+  @keyframes k63 { 0%,45.00% { opacity:0; transform: scale(.92); } 47.92% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k63 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k63 12.0s linear infinite; }
+  @keyframes k64 { 0%,53.33% { opacity:0; transform: translateY(5px); } 57.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k64 { opacity:0; animation: k64 12.0s linear infinite; }
+  @keyframes k65 { 0%,61.67% { opacity:0; transform: scale(.92); } 64.58% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k65 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k65 12.0s linear infinite; }
+  @keyframes k66 { 0%,70.00% { opacity:0; transform: translateY(5px); } 73.75% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k66 { opacity:0; animation: k66 12.0s linear infinite; }
+  @keyframes k67 { 0%,76.67% { opacity:0; transform: translateY(5px); } 80.42% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k67 { opacity:0; animation: k67 12.0s linear infinite; }
+</style>
+<rect width="760" height="508" rx="12" fill="#0b0d10"/>
+<rect width="760" height="34" rx="12" fill="#14181d"/>
+<rect y="22" width="760" height="12" fill="#14181d"/>
+<circle cx="22" cy="17" r="5.5" fill="#ff5f57"/><circle cx="42" cy="17" r="5.5" fill="#febc2e"/><circle cx="62" cy="17" r="5.5" fill="#28c840"/>
+<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k57">~ agentburn · fix</text>
+<g class="k58">
+<text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
+<g class="k59">
+<text x="40" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">agentburn fix</text>
+</g></g>
+<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f5d76e" font-weight="bold" class="k60">🔧 DRY-RUN — nothing was changed</text>
+<g class="k61">
+<text x="24" y="138" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">1. Point Hermes cron jobs at a cheap model</text>
+<text x="40" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">file   : ~/.hermes/cron/jobs.json</text>
+<text x="40" y="184" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">why    : cron is 79% of spend</text>
+<text x="40" y="206" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">effect : bulk of ≈$341/mo → cheap-model pricing</text>
+</g>
+<g class="k62">
+<text x="40" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">proposed:</text>
+<rect x="40" y="252" width="560" height="30" rx="6" fill="#1b2026"/>
+<text x="52" y="272" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"nightly digest": "model": "deepseek/deepseek-chat"</text>
+</g>
+<g class="k63">
+<rect x="612" y="254" width="110" height="26" rx="13" fill="#7df0a8" opacity="0.16"/>
+<text x="625" y="271" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#7df0a8">paste-ready</text>
+</g>
+<g class="k64">
+<text x="24" y="320" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">2. Tame the OpenClaw heartbeat</text>
+<text x="40" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"activeHours": { "start": "09:00", "end": "24:00" }</text>
+<text x="40" y="366" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"lightContext": true</text>
+</g>
+<g class="k65">
+<rect x="444" y="332" width="186" height="26" rx="13" fill="#f7a08a" opacity="0.16"/>
+<text x="457" y="349" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f7a08a">the night-burn killer</text>
+</g>
+<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k66">ⓘ keys verified against the agents' source code</text>
+<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k67">prove it: agentburn --save-baseline → paste → agentburn --compare</text>
+</svg>

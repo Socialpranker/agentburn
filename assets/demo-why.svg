@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="508" viewBox="0 0 760 508" role="img" aria-label="agentburn animated demo">
+<style>
+  @keyframes k45 { 0%,0.00% { opacity:0;  } 3.75% { opacity:1;  } 95.00% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  .k45 { opacity:0; animation: k45 12.0s linear infinite; }
+  @keyframes k46 { 0%,1.67% { opacity:0;  } 2.08% { opacity:1;  } 95.00% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  @keyframes k47 { 0%,1.67% { clip-path: inset(0 100% 0 0); } 10.83%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k47 { animation: k47 12.0s steps(15,end) infinite; }
+  .k46 { opacity:0; animation: k46 12.0s linear infinite; }
+  @keyframes k48 { 0%,13.33% { opacity:0; transform: translateY(5px); } 17.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k48 { opacity:0; animation: k48 12.0s linear infinite; }
+  @keyframes k49 { 0%,18.33% { opacity:0; transform: translateY(5px); } 22.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k49 { opacity:0; animation: k49 12.0s linear infinite; }
+  @keyframes k50 { 0%,31.67% { opacity:0; transform: translateY(5px); } 35.42% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k50 { opacity:0; animation: k50 12.0s linear infinite; }
+  @keyframes k51 { 0%,40.00% { opacity:0; transform: scale(.92); } 42.92% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k51 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k51 12.0s linear infinite; }
+  @keyframes k52 { 0%,48.33% { opacity:0; transform: translateY(5px); } 52.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k52 { opacity:0; animation: k52 12.0s linear infinite; }
+  @keyframes k53 { 0%,58.33% { opacity:0; transform: translateY(5px); } 62.08% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k53 { opacity:0; animation: k53 12.0s linear infinite; }
+  @keyframes k54 { 0%,66.67% { opacity:0; transform: scale(.92); } 69.58% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k54 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k54 12.0s linear infinite; }
+  @keyframes k55 { 0%,75.00% { opacity:0; transform: translateY(5px); } 78.75% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k55 { opacity:0; animation: k55 12.0s linear infinite; }
+  @keyframes k56 { 0%,80.00% { opacity:0; transform: translateY(5px); } 83.75% { opacity:1; transform: none; } 95.00% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k56 { opacity:0; animation: k56 12.0s linear infinite; }
+</style>
+<rect width="760" height="508" rx="12" fill="#0b0d10"/>
+<rect width="760" height="34" rx="12" fill="#14181d"/>
+<rect y="22" width="760" height="12" fill="#14181d"/>
+<circle cx="22" cy="17" r="5.5" fill="#ff5f57"/><circle cx="42" cy="17" r="5.5" fill="#febc2e"/><circle cx="62" cy="17" r="5.5" fill="#28c840"/>
+<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k45">~ agentburn · why</text>
+<g class="k46">
+<text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
+<g class="k47">
+<text x="40" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">agentburn why</text>
+</g></g>
+<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="k48">🔬 what the agent actually did — from its own records</text>
+<g class="k49">
+<text x="24" y="136" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">WHAT IT ACTUALLY DID</text>
+<text x="24" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">browser</text>
+<text x="140" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">34×  ≈210K in results</text>
+<text x="24" y="182" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">web_search</text>
+<text x="140" y="182" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">18×</text>
+</g>
+<g class="k50">
+<text x="24" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">RE-READ LOOPS</text>
+<text x="24" y="244" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">4× read_file(/proj/big.md)  ≈32K re-paid</text>
+</g>
+<g class="k51">
+<rect x="396" y="230" width="208" height="26" rx="13" fill="#f5d76e" opacity="0.16"/>
+<text x="409" y="247" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f5d76e">same file — paid 4 times</text>
+</g>
+<g class="k52">
+<text x="24" y="282" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">RETRY STORMS</text>
+<text x="24" y="306" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f7a08a" class="">Bash: 3 errors / 6 calls — re-paid each time</text>
+</g>
+<g class="k53">
+<text x="24" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">IDLE HEARTBEATS</text>
+<text x="24" y="368" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f7a08a" class="">4 of 9 heartbeat runs did NOTHING — $2.40 of idle burn</text>
+</g>
+<g class="k54">
+<rect x="516" y="354" width="216" height="26" rx="13" fill="#f7a08a" opacity="0.16"/>
+<text x="529" y="371" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f7a08a">woke up · thought · slept</text>
+</g>
+<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k55">💡 1. cache big.md  2. fix Bash flags  3. heartbeat → cheap model</text>
+<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k56">observations with numbers — not verdicts · content never read</text>
+</svg>
