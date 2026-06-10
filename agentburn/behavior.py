@@ -38,8 +38,18 @@ class Storm:
 
 
 @dataclass
+class FunctionStat:
+    name: str
+    calls: int
+    errors: int
+    result_tokens: int  # 0 = the agent didn't record result weights
+
+
+@dataclass
 class BehaviorReport:
     agent: str
+    source_filter: str = ""
+    functions: list = field(default_factory=list)
     rereads: list = field(default_factory=list)
     storms: list = field(default_factory=list)
     idle_heartbeats: tuple = (0, 0, None)  # count, total hb sessions, cost
@@ -54,10 +64,25 @@ def _is_failure(outcome: str) -> bool:
     return any(m in o for m in FAIL_MARKERS)
 
 
-def analyze_behavior(snap: Snapshot, top: int = 6) -> BehaviorReport:
-    rep = BehaviorReport(agent=snap.agent)
+def analyze_behavior(snap: Snapshot, top: int = 6, source_filter: str = "") -> BehaviorReport:
+    rep = BehaviorReport(agent=snap.agent, source_filter=source_filter)
     title = {s.id: (s.title or s.id)[:46] for s in snap.sessions}
     sess_by_id = {s.id: s for s in snap.sessions}
+
+    # what functions did it actually call (the "decompose what it did" view)
+    fstat = {}
+    for e in snap.events:
+        st = fstat.setdefault(e.name, FunctionStat(e.name, 0, 0, 0))
+        if e.ok is None and e.tokens is None:
+            st.calls += 1  # a call event
+        if e.ok is False:
+            st.errors += 1
+        if e.tokens:
+            st.result_tokens += e.tokens
+            st.calls = max(st.calls, 1)
+    rep.functions = sorted(
+        fstat.values(), key=lambda s: (s.result_tokens, s.calls), reverse=True
+    )[: top + 4]
 
     # --- re-read loops: same tool + same salient argument, 3+ times in one session
     arg_counts = Counter()
@@ -166,12 +191,47 @@ def analyze_behavior(snap: Snapshot, top: int = 6) -> BehaviorReport:
     return rep
 
 
+def filter_snapshot(snap: Snapshot, query: str) -> Snapshot:
+    """Drill into one source, e.g. `telegram` → gateway:telegram. Mutates & returns snap."""
+    from .model import ToolStat
+
+    sources = {s.source for s in snap.sessions}
+    q = query.lower().strip()
+    match = q if q in sources else None
+    if not match:
+        cands = sorted(s for s in sources if s.endswith(":" + q) or q in s)
+        if len(cands) == 1:
+            match = cands[0]
+        elif len(cands) > 1:
+            raise RuntimeError(f"--source '{query}' is ambiguous here: {', '.join(cands)}")
+    if not match:
+        raise RuntimeError(
+            f"--source '{query}' not found. Available: {', '.join(sorted(sources))}"
+        )
+    keep = {s.id for s in snap.sessions if s.source == match}
+    snap.sessions = [s for s in snap.sessions if s.id in keep]
+    snap.events = [e for e in snap.events if e.session_id in keep]
+    snap.outcomes = {k: v for k, v in snap.outcomes.items() if k in keep}
+    tools = {}
+    for e in snap.events:
+        t = tools.setdefault(e.name, ToolStat(e.name, 0, 0))
+        if e.ok is None and e.tokens is None:
+            t.calls += 1
+        if e.tokens:
+            t.result_tokens += e.tokens
+            t.calls = max(t.calls, 1)
+    snap.tools = sorted(tools.values(), key=lambda t: t.result_tokens, reverse=True)
+    snap.agent = f"{snap.agent} · {match}"
+    return snap
+
+
 def behavior_json(rep: BehaviorReport) -> dict:
     from dataclasses import asdict
 
     return {
         "agentburn_why": 1,
         "agent": rep.agent,
+        "functions": [asdict(f) for f in rep.functions],
         "rereads": [asdict(r) for r in rep.rereads],
         "storms": [asdict(s) for s in rep.storms],
         "idle_heartbeats": {"idle": rep.idle_heartbeats[0], "total": rep.idle_heartbeats[1],
@@ -192,6 +252,15 @@ def render_behavior(rep: BehaviorReport, color: bool = True) -> str:
     out = ["", b(f"🔬 agentburn why — {rep.agent}")]
     out.append(dim("   what the agent actually did, from its own records — observations, not verdicts"))
     out.append("")
+
+    if rep.functions:
+        out.append(b("   WHAT IT ACTUALLY DID — functions called"))
+        out.append(dim("   every tool/function invocation the agent recorded, heaviest first"))
+        for f in rep.functions:
+            err = red(f"  {f.errors} errors") if f.errors else ""
+            tok = f"  ≈{fmt_tokens(f.result_tokens)} in results" if f.result_tokens else ""
+            out.append(f"   {f.name:<26} {f.calls:>4}×{tok}{err}")
+        out.append("")
 
     if rep.rereads:
         out.append(b("   RE-READ LOOPS"))

@@ -39,6 +39,7 @@ def parse_night(s: str) -> tuple:
 RECIPES = """examples:
   agentburn                          every agent on this machine, last 30 days
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
+  agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
   agentburn --save-baseline          snapshot → optimize config → agentburn --compare
   agentburn doctor                   accounting health + ready-to-paste upstream bug report
@@ -64,6 +65,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--week", action="store_true", help="shortcut for --days 7")
     ap.add_argument("--night", type=parse_night, default=(0, 8), help="'while you slept' window, e.g. 0-8 (local)")
     ap.add_argument("--dumps-dir", default=None, help="hermes: directory with request_dump_*.json")
+    ap.add_argument("--source", default=None, metavar="NAME",
+                    help="drill into one source, e.g. telegram / cron / heartbeat / subagent / cli")
     ap.add_argument("--share", action="store_true", help="print an anonymized burn card (safe to post)")
     ap.add_argument("--svg", default=None, metavar="FILE", help="with --share: also write an SVG card")
     ap.add_argument("--save-baseline", action="store_true", help="save current pace as the optimization baseline")
@@ -154,7 +157,12 @@ def main(argv=None) -> int:
         found = [need_single(found, "this mode")]
 
     def load(name):
-        return ADAPTERS[name].load(db_path=args.db, days=args.days or None, dumps_dir=args.dumps_dir)
+        snap = ADAPTERS[name].load(db_path=args.db, days=args.days or None, dumps_dir=args.dumps_dir)
+        if args.source:
+            from .behavior import filter_snapshot
+
+            snap = filter_snapshot(snap, args.source)
+        return snap
 
     try:
         if args.command == "doctor":

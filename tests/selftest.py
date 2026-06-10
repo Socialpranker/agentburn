@@ -449,6 +449,39 @@ def main():
     ok("empty window → no TL;DR, friendly hint in render",
        _tldr(empty, []) == [] and "Nothing recorded" in render_terminal(empty, [], color=False))
 
+    print("--source drill-down:")
+    from agentburn.behavior import filter_snapshot
+
+    # openclaw: 'telegram' resolves to gateway:telegram; functions decomposed
+    oc3 = openclaw.load(db_path=oc_root, days=30)
+    oc3 = filter_snapshot(oc3, "telegram")
+    ok("resolves bare name to gateway:telegram", oc3.agent.endswith("· gateway:telegram"))
+    ok("keeps only that source's sessions", {s.source for s in oc3.sessions} == {"gateway:telegram"})
+    fb = analyze_behavior(oc3)
+    bf = next((f for f in fb.functions if f.name == "browser"), None)
+    ok("decomposes functions: browser 5 calls, 3 errors", bf and bf.calls == 5 and bf.errors == 3)
+    ok("tools rebuilt for the slice", any(t.name == "browser" for t in oc3.tools))
+    try:
+        filter_snapshot(hermes.load(db_path=env_db, days=30), "gateway")  # telegram + discord
+        ok("ambiguous source raises", False)
+    except RuntimeError as e:
+        ok("ambiguous source raises", "ambiguous" in str(e))
+    r_src = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
+                            "--db", env_db, "--source", "telegram", "--no-color"],
+                           capture_output=True, text=True)
+    ok("cli why --source telegram: header + functions section",
+       "gateway:telegram" in r_src.stdout and "WHAT IT ACTUALLY DID" in r_src.stdout
+       and "browser" in r_src.stdout)
+    r_full = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
+                             "--db", env_db, "--no-color"], capture_output=True, text=True)
+    ok("full why also lists functions (web_search)", "web_search" in r_full.stdout)
+    r_srep = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
+                             "--db", env_db, "--source", "telegram", "--json"],
+                            capture_output=True, text=True)
+    sj = json.loads(r_srep.stdout)
+    ok("report --source: totals are the slice only",
+       sj["total"]["sessions"] == 1 and abs(sj["total"]["cost"] - 3.0) < 1e-6)
+
     print(f"\nAll {PASSED} checks passed.")
 
 

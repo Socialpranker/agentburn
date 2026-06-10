@@ -75,6 +75,8 @@ agentburn --agent openclaw       # just one
 agentburn --days 7
 agentburn --agent hermes --db /path/to/state.db
 agentburn why                    # behavioral forensics: loops, retry storms, idle heartbeats
+agentburn why --source telegram  # decompose ONE source: functions called, errors, loops
+agentburn --source cron          # cost report for one source only
 agentburn --night 23-7           # custom overnight window (local time)
 agentburn --budget-month 50 --fail-over   # sentinel for cron/CI
 agentburn --json                 # machine-readable, pipe it anywhere
@@ -105,8 +107,9 @@ where it burns: cron 79% · cli 9% · telegram 7% · subagent 5%
 **🔬 `agentburn why` — behavioral forensics.** `report` says *where* it burns; `why` says *why*, from the agent's own recorded actions and thoughts:
 
 ```text
-🔬 agentburn why — openclaw
+🔬 agentburn why — openclaw · gateway:telegram
 
+   WHAT IT ACTUALLY DID   browser 34× ≈210K in results · web_search 18× · shell 7× (2 errors)
    RE-READ LOOPS          5× browser(https://news.site/page) — every repeat re-paid in full
    RETRY STORMS           Bash: 3 errors / 6 calls — paying full price for every error
    IDLE HEARTBEATS        4 of 9 heartbeat runs did NOTHING — $2.40 of pure idle burn
