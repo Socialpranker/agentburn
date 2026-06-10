@@ -26,7 +26,29 @@ import sqlite3
 import time
 from typing import Optional
 
-from ..model import DumpComposition, SessionRec, Snapshot, ToolStat
+from ..model import ActionEvent, DumpComposition, SessionRec, Snapshot, ToolStat
+
+ARG_KEYS = ("file_path", "path", "filename", "file", "url", "command", "cmd", "query")
+
+
+def salient_arg(args) -> Optional[str]:
+    """Pull the one argument worth grouping on (path/command/url), truncated."""
+    if isinstance(args, str):
+        try:
+            import json as _json
+
+            args = _json.loads(args)
+        except Exception:
+            return args[:60] or None
+    if isinstance(args, dict):
+        for k in ARG_KEYS:
+            v = args.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()[:60]
+        for v in args.values():
+            if isinstance(v, str) and v.strip():
+                return v.strip()[:60]
+    return None
 
 GATEWAY_SOURCES = {
     "telegram",
@@ -123,6 +145,7 @@ def load(
                 _col(scols, "estimated_cost_usd"),
                 _col(scols, "actual_cost_usd"),
                 _col(scols, "billing_provider"),
+                _col(scols, "end_reason"),
             ]
         )
         where = "WHERE COALESCE(started_at, 0) >= ?" if days else ""
@@ -161,6 +184,8 @@ def load(
                     provider=r["billing_provider"],
                 )
             )
+            if r["end_reason"]:
+                snap.outcomes[str(r["id"])] = str(r["end_reason"])
 
         mcols = _columns(con, "messages")
         if {"tool_name", "timestamp"} <= mcols:
@@ -176,6 +201,56 @@ def load(
                 snap.tools.append(
                     ToolStat(name=r["tool_name"], calls=int(r["calls"]), result_tokens=int(r["toks"] or 0))
                 )
+
+        # behavioral events: tool calls with their salient argument + result weights
+        if {"role", "timestamp"} <= mcols:
+            mwhere = "AND timestamp >= ?" if days else ""
+            if "tool_calls" in mcols:
+                for r in con.execute(
+                    f"""SELECT session_id, tool_calls, timestamp FROM messages
+                        WHERE tool_calls IS NOT NULL AND tool_calls != '' {mwhere}
+                        ORDER BY timestamp LIMIT 60000""",
+                    (since,) if days else (),
+                ):
+                    try:
+                        calls = json.loads(r["tool_calls"])
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    if isinstance(calls, dict):
+                        calls = [calls]
+                    if not isinstance(calls, list):
+                        continue
+                    for c in calls:
+                        if not isinstance(c, dict):
+                            continue
+                        fn = c.get("function") if isinstance(c.get("function"), dict) else c
+                        name = fn.get("name") or c.get("name") or c.get("tool_name")
+                        if not name:
+                            continue
+                        snap.events.append(
+                            ActionEvent(
+                                session_id=str(r["session_id"]),
+                                ts=r["timestamp"],
+                                name=str(name)[:40],
+                                arg_key=salient_arg(fn.get("arguments") or c.get("arguments")),
+                            )
+                        )
+            if "tool_name" in mcols and "token_count" in mcols:
+                for r in con.execute(
+                    f"""SELECT session_id, tool_name, timestamp, COALESCE(token_count,0) AS tc
+                        FROM messages
+                        WHERE tool_name IS NOT NULL AND tool_name != '' AND COALESCE(token_count,0) > 0
+                        {mwhere} ORDER BY timestamp LIMIT 20000""",
+                    (since,) if days else (),
+                ):
+                    snap.events.append(
+                        ActionEvent(
+                            session_id=str(r["session_id"]),
+                            ts=r["timestamp"],
+                            name=str(r["tool_name"])[:40],
+                            tokens=int(r["tc"]),
+                        )
+                    )
     finally:
         con.close()
 

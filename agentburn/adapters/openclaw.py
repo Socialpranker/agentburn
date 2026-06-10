@@ -25,7 +25,8 @@ import os
 import time
 from typing import Optional
 
-from ..model import SessionRec, Snapshot
+from ..model import ActionEvent, SessionRec, Snapshot
+from .hermes import salient_arg
 
 CHANNELS = {
     "telegram",
@@ -139,9 +140,13 @@ def load(
 
             cost = e.get("estimatedCostUsd")
             depth = int(e.get("spawnDepth") or 0)
+            sid = str(e.get("sessionId") or key)
+            outcome = e.get("status") or ("aborted" if e.get("abortedLastRun") else None)
+            if outcome and str(outcome).lower() not in ("running", "done"):
+                snap.outcomes[sid] = str(outcome)
             snap.sessions.append(
                 SessionRec(
-                    id=str(e.get("sessionId") or key),
+                    id=sid,
                     source=source_from_key(str(key), depth),
                     model=e.get("modelOverride") or e.get("model"),
                     started_at=started,
@@ -166,9 +171,73 @@ def load(
             "OpenClaw store(s) found but no sessions parsed — schema may have changed; "
             "please open an issue with one (redacted) sessions.json entry."
         )
+
+    # behavioral events from transcripts (<sessions dir>/<sessionId>.jsonl)
+    _scan_transcripts(snap, stores)
     if undifferentiated:
         snap.warnings.append(
             f"{undifferentiated} OpenClaw session(s) only stored an undifferentiated total — "
             "counted as input tokens."
         )
     return snap
+
+
+def _scan_transcripts(snap: Snapshot, stores: list, max_events: int = 60_000) -> None:
+    """Tool-call/result events from per-session transcript JSONL files."""
+    wanted = {s.id for s in snap.sessions}
+    for store in stores:
+        d = os.path.dirname(store)
+        for sid in wanted:
+            path = os.path.join(d, f"{sid}.jsonl")
+            if not os.path.exists(path):
+                continue
+            try:
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    for raw in f:
+                        if len(snap.events) >= max_events:
+                            return
+                        raw = raw.strip()
+                        if not raw:
+                            continue
+                        try:
+                            obj = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+                        msg = obj.get("message") if isinstance(obj.get("message"), dict) else obj
+                        content = msg.get("content")
+                        if not isinstance(content, list):
+                            continue
+                        ts = obj.get("timestamp") or msg.get("timestamp")
+                        ts = (ts / 1000.0 if isinstance(ts, (int, float)) and ts > 1e11 else ts) or None
+                        for item in content:
+                            if not isinstance(item, dict):
+                                continue
+                            kind = item.get("type")
+                            if kind in ("toolCall", "tool_use", "tool-call"):
+                                name = item.get("name") or item.get("toolName")
+                                if not name:
+                                    continue
+                                snap.events.append(
+                                    ActionEvent(
+                                        session_id=sid,
+                                        ts=ts,
+                                        name=str(name)[:40],
+                                        arg_key=salient_arg(item.get("arguments") or item.get("input")),
+                                    )
+                                )
+                            elif kind in ("toolResult", "tool_result", "tool-result"):
+                                is_err = bool(
+                                    item.get("isError") or item.get("is_error")
+                                    or str(item.get("status", "")).lower() == "error"
+                                )
+                                name = item.get("name") or item.get("toolName") or "tool"
+                                snap.events.append(
+                                    ActionEvent(
+                                        session_id=sid,
+                                        ts=ts,
+                                        name=str(name)[:40],
+                                        ok=not is_err,
+                                    )
+                                )
+            except OSError:
+                continue

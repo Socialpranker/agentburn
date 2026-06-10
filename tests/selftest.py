@@ -335,6 +335,89 @@ def main():
     print("plain-language section subtitles:")
     ok("report explains itself", "silent tax" in term2 and "spends the money" in term2)
 
+    print("behavior (`why`):")
+    from agentburn.behavior import analyze_behavior, render_behavior
+
+    # hermes: re-read loop (4× same file via tool_calls) + result token weights + failed session
+    con = sqlite3.connect(env_db)
+    tc = json.dumps([{"function": {"name": "read_file", "arguments": {"file_path": "/proj/big.md"}}}])
+    for i in range(4):
+        con.execute("INSERT INTO messages (session_id, role, tool_calls, timestamp, token_count) VALUES (?,?,?,?,?)",
+                    ("cli1", "assistant", tc, night_ts(1, 14.0 + i * 0.01), None))
+        con.execute("INSERT INTO messages (session_id, role, tool_name, timestamp, token_count) VALUES (?,?,?,?,?)",
+                    ("cli1", "tool", "read_file", night_ts(1, 14.005 + i * 0.01), 8_000))
+    con.execute("UPDATE sessions SET end_reason='timeout' WHERE id='tg1'")
+    con.commit(); con.close()
+    h2 = hermes.load(db_path=env_db, days=30)
+    hb_rep = analyze_behavior(h2)
+    ok("hermes: re-read loop detected with ≈tokens",
+       any(r.name == "read_file" and r.arg == "/proj/big.md" and r.count == 4 and r.approx_tokens > 0
+           for r in hb_rep.rereads))
+    ok("hermes: failure burn from end_reason",
+       hb_rep.failure_cost[0] == 1 and hb_rep.failure_cost[1] == 3.0)
+    ok("hermes: honesty note about errors", any("retry storms" in n.lower() for n in hb_rep.notes))
+    ok("hermes: observations non-empty", 1 <= len(hb_rep.observations) <= 3)
+
+    # openclaw: transcript events → reread + storm; idle heartbeat; failed subagent
+    oc_store["cron:main-heartbeat-idle"] = {"sessionId": "hb2", "model": "deepseek/v3", "totalTokens": 0,
+                                "estimatedCostUsd": 0.6, "sessionStartedAt": now_ms - 3600_000}
+    oc_store["agent:main:sub:fail"] = {"sessionId": "sbf", "model": "deepseek/v3", "spawnDepth": 1,
+                                       "inputTokens": 5_000, "outputTokens": 500,
+                                       "estimatedCostUsd": 0.9, "status": "timeout",
+                                       "startedAt": now_ms - 3000_000}
+    with open(os.path.join(store_dir, "sessions.json"), "w") as f:
+        json.dump(oc_store, f)
+    tg_lines = []
+    for i in range(5):
+        tg_lines.append({"message": {"role": "assistant", "content": [
+            {"type": "toolCall", "id": f"c{i}", "name": "browser",
+             "arguments": {"url": "https://news.site/page"}}]}, "timestamp": now_ms - 3500_000 + i})
+    for i in range(3):
+        tg_lines.append({"message": {"role": "toolResult", "content": [
+            {"type": "toolResult", "name": "browser", "isError": True}]}, "timestamp": now_ms - 3400_000 + i})
+    with open(os.path.join(store_dir, "tg.jsonl"), "w") as f:
+        f.write("\n".join(json.dumps(l) for l in tg_lines))
+    oc2 = openclaw.load(db_path=oc_root, days=30)
+    ob_rep = analyze_behavior(oc2)
+    ok("openclaw: transcript re-read loop (browser ×5 same url)",
+       any(r.name == "browser" and r.count == 5 for r in ob_rep.rereads))
+    ok("openclaw: retry storm from isError results",
+       any(s.name == "browser" and s.errors == 3 for s in ob_rep.storms))
+    ok("openclaw: idle heartbeat counted with cost",
+       ob_rep.idle_heartbeats[0] == 1 and abs((ob_rep.idle_heartbeats[2] or 0) - 0.6) < 1e-6)
+    ok("openclaw: failure burn includes timeout subagent",
+       ob_rep.failure_cost[0] == 1 and abs(ob_rep.failure_cost[1] - 0.9) < 1e-6)
+
+    # claude-code: tool_use reread + tool_result error storm
+    cc_extra = []
+    for i in range(3):
+        cc_extra.append({"type": "assistant", "timestamp": iso(3),
+                         "message": {"model": "claude-fable-5", "content": [
+                             {"type": "tool_use", "id": f"t{i}", "name": "Read",
+                              "input": {"file_path": "/src/huge.py"}}]}})
+    for i in range(3):
+        cc_extra.append({"type": "assistant", "timestamp": iso(3),
+                         "message": {"model": "claude-fable-5", "content": [
+                             {"type": "tool_use", "id": f"b{i}", "name": "Bash",
+                              "input": {"command": "pytest -x"}}]}})
+        cc_extra.append({"type": "user", "timestamp": iso(3),
+                         "message": {"role": "user", "content": [
+                             {"type": "tool_result", "tool_use_id": f"b{i}", "is_error": True}]}})
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a") as f:
+        f.write("\n" + "\n".join(json.dumps(l) for l in cc_extra))
+    cc2 = claude_code.load(db_path=cc_root, days=30)
+    cb_rep = analyze_behavior(cc2)
+    ok("claude-code: Read loop detected", any(r.name == "Read" and r.count == 3 for r in cb_rep.rereads))
+    ok("claude-code: Bash retry storm with linked names",
+       any(s.name == "Bash" and s.errors == 3 for s in cb_rep.storms))
+    rendered = render_behavior(ob_rep, color=False)
+    ok("why render: sections + privacy line",
+       all(k in rendered for k in ("RE-READ LOOPS", "RETRY STORMS", "IDLE HEARTBEATS",
+                                   "BURNED ON FAILURES", "WHAT TO CHANGE", "no content")))
+    r_why = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
+                            "--db", env_db, "--no-color"], capture_output=True, text=True)
+    ok("cli why: runs and reports the loop", r_why.returncode == 0 and "read_file" in r_why.stdout)
+
     print(f"\nAll {PASSED} checks passed.")
 
 

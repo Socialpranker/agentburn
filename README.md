@@ -71,6 +71,7 @@ agentburn                        # every agent on this machine, last 30 days
 agentburn --agent openclaw       # just one
 agentburn --days 7
 agentburn --agent hermes --db /path/to/state.db
+agentburn why                    # behavioral forensics: loops, retry storms, idle heartbeats
 agentburn --night 23-7           # custom overnight window (local time)
 agentburn --budget-month 50 --fail-over   # sentinel for cron/CI
 agentburn --json                 # machine-readable, pipe it anywhere
@@ -92,6 +93,23 @@ heaviest overhead: telegram 20,000 tokens/call (community baseline ≈8k/call: +
 **📏 Calibration against public benchmarks.** "Is 15k input tokens per call normal?" The report compares your fixed overhead with community-measured references embedded as dated constants (e.g. the [Phala always-on-agent benchmark](https://phala.com/posts/understanding-openclaws-token-usage), 2026-03: ≈8k/call baseline). No network — sources are cited inline.
 
 **📐 Optimize → prove it (`--save-baseline` / `--compare`).** Snapshot your pace, change the config (cheaper cron model, trimmed toolsets), then `agentburn --compare` shows the delta in $/month — pace-normalized, so a 7-day baseline compares honestly with a 30-day window. Every recommendation becomes a testable promise.
+
+**🔬 `agentburn why` — behavioral forensics.** `report` says *where* it burns; `why` says *why*, from the agent's own recorded actions and thoughts:
+
+```text
+🔬 agentburn why — openclaw
+
+   RE-READ LOOPS          5× browser(https://news.site/page) — every repeat re-paid in full
+   RETRY STORMS           Bash: 3 errors / 6 calls — paying full price for every error
+   IDLE HEARTBEATS        4 of 9 heartbeat runs did NOTHING — $2.40 of pure idle burn
+   BURNED ON FAILURES     2 failed runs → ~$3.90 (timeout, killed)
+   THINKS MORE THAN IT WORKS   62% thinking · 84K tokens · "rename files task"
+
+   💡 WHAT TO CHANGE
+   1. `/proj/big.md` was fetched 4× in one session ≈32K tokens re-paid — cache it…
+```
+
+Observations with numbers, not verdicts; only tool names, truncated argument keys and counters — message content never leaves the machine (and never enters the report).
 
 **🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
 

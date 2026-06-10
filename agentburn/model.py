@@ -50,6 +50,18 @@ class ToolStat:
 
 
 @dataclass
+class ActionEvent:
+    """One observed agent action (tool call), normalized across agents."""
+
+    session_id: str
+    ts: Optional[float]
+    name: str  # tool name
+    arg_key: Optional[str] = None  # salient argument (file path / command / url), truncated
+    ok: Optional[bool] = None  # False when the agent recorded an error result
+    tokens: Optional[int] = None  # result weight when the agent recorded it
+
+
+@dataclass
 class DumpComposition:
     """Input composition sampled from request dumps (optional, exact-ish)."""
 
@@ -61,7 +73,7 @@ class DumpComposition:
 
 @dataclass
 class Snapshot:
-    agent: str  # "hermes"
+    agent: str  # "hermes" | "openclaw" | "claude-code"
     source_path: str
     generated_at: float
     days: Optional[int]
@@ -69,3 +81,6 @@ class Snapshot:
     tools: list[ToolStat] = field(default_factory=list)
     composition: Optional[DumpComposition] = None
     warnings: list[str] = field(default_factory=list)
+    # behavioral layer (filled when the adapter can see actions/outcomes)
+    events: list[ActionEvent] = field(default_factory=list)
+    outcomes: dict = field(default_factory=dict)  # session_id → "failed" | "timeout" | …

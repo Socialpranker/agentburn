@@ -41,8 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="agentburn",
         description="Where does your AI agent burn money? Local profiler, zero deps, nothing leaves your machine.",
     )
-    ap.add_argument("command", nargs="?", choices=["report", "doctor"], default="report",
-                    help="report (default) or doctor (accounting health + upstream bug report)")
+    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why"], default="report",
+                    help="report (default) · why (behavioral forensics: loops, storms, idle heartbeats, "
+                         "failure burn) · doctor (accounting health)")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -121,6 +122,7 @@ def main(argv=None) -> int:
     color = sys.stdout.isatty() and not args.no_color
 
     single_modes = args.command == "doctor" or args.share or args.save_baseline or args.compare
+    # `why`, like `report`, runs across every detected agent
     found = pick_agents(args)
     if single_modes:
         found = [need_single(found, "this mode")]
@@ -133,6 +135,13 @@ def main(argv=None) -> int:
             from .doctor import render_doctor
 
             print(render_doctor(load(found[0]), color=color))
+            return 0
+
+        if args.command == "why":
+            from .behavior import analyze_behavior, render_behavior
+
+            for n in found:
+                print(render_behavior(analyze_behavior(load(n)), color=color))
             return 0
 
         analyses = [analyze(load(n), night_window=args.night) for n in found]

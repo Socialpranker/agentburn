@@ -24,7 +24,8 @@ import re
 import time
 from typing import Optional
 
-from ..model import SessionRec, Snapshot
+from ..model import ActionEvent, SessionRec, Snapshot
+from .hermes import salient_arg
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
@@ -56,13 +57,18 @@ def _parse_ts(v) -> Optional[float]:
     return None
 
 
-def _scan_file(path: str):
-    """→ (first_ts, last_ts, api_calls, usage sums, model, lines) — tolerant."""
+def _scan_file(path: str, sid: str, events: list):
+    """→ (first_ts, last_ts, api_calls, usage sums, model, lines) — tolerant.
+
+    Also appends ActionEvents: tool_use (with salient arg) and tool_result
+    error flags, linked by tool_use_id so retry storms are attributable.
+    """
     first = last = None
     calls = 0
     inp = out = cr = cw = 0
     model = None
     lines = 0
+    id_to_name = {}
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for raw in f:
             raw = raw.strip()
@@ -78,16 +84,43 @@ def _scan_file(path: str):
                 first = ts if first is None else min(first, ts)
                 last = ts if last is None else max(last, ts)
             msg = obj.get("message")
-            if isinstance(msg, dict):
-                u = msg.get("usage")
-                if isinstance(u, dict):
-                    calls += 1
-                    inp += int(u.get("input_tokens") or 0)
-                    out += int(u.get("output_tokens") or 0)
-                    cw += int(u.get("cache_creation_input_tokens") or 0)
-                    cr += int(u.get("cache_read_input_tokens") or 0)
-                if msg.get("model"):
-                    model = msg["model"]
+            if not isinstance(msg, dict):
+                continue
+            u = msg.get("usage")
+            if isinstance(u, dict):
+                calls += 1
+                inp += int(u.get("input_tokens") or 0)
+                out += int(u.get("output_tokens") or 0)
+                cw += int(u.get("cache_creation_input_tokens") or 0)
+                cr += int(u.get("cache_read_input_tokens") or 0)
+            if msg.get("model"):
+                model = msg["model"]
+            content = msg.get("content")
+            if isinstance(content, list) and len(events) < 80_000:
+                for item in content:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("type") == "tool_use" and item.get("name"):
+                        if item.get("id"):
+                            id_to_name[item["id"]] = item["name"]
+                        events.append(
+                            ActionEvent(
+                                session_id=sid,
+                                ts=ts,
+                                name=str(item["name"])[:40],
+                                arg_key=salient_arg(item.get("input")),
+                            )
+                        )
+                    elif item.get("type") == "tool_result":
+                        name = id_to_name.get(item.get("tool_use_id"), "tool")
+                        events.append(
+                            ActionEvent(
+                                session_id=sid,
+                                ts=ts,
+                                name=str(name)[:40],
+                                ok=not bool(item.get("is_error")),
+                            )
+                        )
     return first, last, calls, inp, out, cr, cw, model, lines
 
 
@@ -116,17 +149,19 @@ def load(
     subs = glob.glob(os.path.join(root, "*", "*", "subagents", "*.jsonl"))
 
     def consider(path: str, source: str, parent: Optional[str], title: str):
+        sid = os.path.basename(path)[:-6]
+        local_events: list = []
         try:
             if days and os.path.getmtime(path) < since:
                 return
-            first, last, calls, inp, out, cr, cw, model, lines = _scan_file(path)
+            first, last, calls, inp, out, cr, cw, model, lines = _scan_file(path, sid, local_events)
         except OSError:
             return
         if lines == 0:
             return
         if days and last is not None and last < since:
             return
-        sid = os.path.basename(path)[:-6]
+        snap.events.extend(local_events)
         snap.sessions.append(
             SessionRec(
                 id=sid,
