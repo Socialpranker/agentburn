@@ -540,6 +540,57 @@ def main():
     ok("explain: missing --model is a clear error", r_nomodel.returncode == 2 and "--model" in r_nomodel.stderr)
     srv.shutdown()
 
+    print("mcp server:")
+    init = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                       "params": {"protocolVersion": "2025-06-18"}})
+    tlist = json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    tcall = json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                        "params": {"name": "burn_report", "arguments": {"agent": "hermes"}}})
+    bad = json.dumps({"jsonrpc": "2.0", "id": 4, "method": "nope"})
+    env = dict(os.environ, HOME=os.path.dirname(env_db))  # hermes adapter won't find ~/.hermes; pass agent+db? mcp uses default paths →
+    # точечно: подменяем default_db_path через HERMES-структуру в tmp
+    hermes_home = tempfile.mkdtemp()
+    os.makedirs(os.path.join(hermes_home, ".hermes"), exist_ok=True)
+    import shutil
+    shutil.copy(env_db, os.path.join(hermes_home, ".hermes", "state.db"))
+    env = dict(os.environ, HOME=hermes_home)
+    r_mcp = subprocess.run([sys.executable, "-m", "agentburn.cli", "mcp"],
+                           input="\n".join([init, tlist, tcall, bad]) + "\n",
+                           capture_output=True, text=True, env=env)
+    lines = [json.loads(l) for l in r_mcp.stdout.strip().splitlines()]
+    byid = {l.get("id"): l for l in lines}
+    ok("mcp: initialize → serverInfo", byid[1]["result"]["serverInfo"]["name"] == "agentburn")
+    ok("mcp: tools/list → 3 tools",
+       {t["name"] for t in byid[2]["result"]["tools"]} == {"burn_report", "burn_why", "burn_card"})
+    body0 = json.loads(byid[3]["result"]["content"][0]["text"])
+    ok("mcp: tools/call burn_report returns the report JSON",
+       byid[3]["result"]["isError"] is False and body0["agentburn"] == 1 and body0["total"]["sessions"] > 0)
+    ok("mcp: unknown method → -32601", byid[4]["error"]["code"] == -32601)
+
+    print("fix (dry-run):")
+    jobs_dir = os.path.join(hermes_home, ".hermes", "cron")
+    os.makedirs(jobs_dir, exist_ok=True)
+    with open(os.path.join(jobs_dir, "jobs.json"), "w") as f:
+        json.dump({"jobs": [{"id": "j1", "name": "nightly digest", "model": "anthropic/claude-opus-x"},
+                            {"id": "j2", "name": "weekly report", "model": None}]}, f)
+    r_fix = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
+                            "--db", os.path.join(hermes_home, ".hermes", "state.db"), "--no-color"],
+                           capture_output=True, text=True)
+    ok("fix: dry-run header, nothing applied", "DRY-RUN" in r_fix.stdout and "nothing was changed" in r_fix.stdout)
+    ok("fix: hermes cron patch with real jobs.json path and jobs",
+       "cron" in r_fix.stdout and "jobs.json" in r_fix.stdout and "nightly digest" in r_fix.stdout
+       and "deepseek/deepseek-chat" in r_fix.stdout)
+    ok("fix: telegram toolset patch present", "toolset" in r_fix.stdout.lower())
+    ok("fix: verified-keys notes", "verified in" in r_fix.stdout)
+    r_fix_oc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "openclaw",
+                               "--db", oc_root, "--no-color"], capture_output=True, text=True)
+    ok("fix: openclaw heartbeat patch (every/activeHours/lightContext)",
+       all(k in r_fix_oc.stdout for k in ("heartbeat", "activeHours", "lightContext", "openclaw.json")))
+    r_fix_cc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "claude-code",
+                               "--db", cc_root, "--no-color"], capture_output=True, text=True)
+    ok("fix: claude-code → honest 'no applicable patches'",
+       r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
+
     print(f"\nAll {PASSED} checks passed.")
 
 

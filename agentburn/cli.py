@@ -42,6 +42,8 @@ RECIPES = """examples:
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
   agentburn --save-baseline          snapshot → optimize config → agentburn --compare
+  agentburn fix                      ready-to-paste config patches (dry-run, never writes)
+  agentburn mcp                      MCP stdio server: your agent asks about its own burn
   agentburn explain --model llama3.1       plain-language interpretation via LOCAL llm (ollama)
   agentburn doctor                   accounting health + ready-to-paste upstream bug report
   agentburn --budget-night 5 --fail-over   cron guard: exit 1 when night burn exceeds $5/mo
@@ -55,9 +57,10 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=RECIPES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why", "explain"], default="report",
-                    help="report (default) · why (behavioral forensics) · explain (LLM interpretation, "
-                         "local by default) · doctor (accounting health)")
+    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why", "explain", "mcp", "fix"],
+                    default="report",
+                    help="report (default) · why (behavioral forensics) · explain (LLM interpretation) · "
+                         "fix (config patches, dry-run) · doctor (accounting health) · mcp (stdio server)")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -151,13 +154,18 @@ def _ansi_ok() -> bool:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "mcp":
+        from .mcp import serve
+
+        serve()
+        return 0
     if args.today:
         args.days = 1
     elif args.week:
         args.days = 7
     color = sys.stdout.isatty() and not args.no_color and _ansi_ok()
 
-    single_modes = (args.command in ("doctor", "explain")
+    single_modes = (args.command in ("doctor", "explain", "fix")
                     or args.share or args.save_baseline or args.compare)
     # `why`, like `report`, runs across every detected agent
     found = pick_agents(args)
@@ -177,6 +185,16 @@ def main(argv=None) -> int:
             from .doctor import render_doctor
 
             print(render_doctor(load(found[0]), color=color))
+            return 0
+
+        if args.command == "fix":
+            from .behavior import analyze_behavior
+            from .fix import build_fixes, render_fixes
+
+            snap = load(found[0])
+            a = analyze(snap, night_window=args.night)
+            patches = build_fixes(snap.agent, snap.source_path, a, analyze_behavior(snap))
+            print(render_fixes(snap.agent, patches, color=color))
             return 0
 
         if args.command == "explain":

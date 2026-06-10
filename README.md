@@ -1,5 +1,13 @@
 # agentburn
 
+<p>
+  <a href="https://pypi.org/project/agentburn/"><img alt="PyPI" src="https://img.shields.io/pypi/v/agentburn?color=f7775a"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-5ab0f7">
+  <img alt="zero deps" src="https://img.shields.io/badge/dependencies-0-7df0a8">
+  <img alt="offline checks" src="https://img.shields.io/badge/offline_checks-104-c89bf7">
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-8a949e"></a>
+</p>
+
 > **Where does your AI agent burn money — while you sleep?**
 
 Always-on agents bill you around the clock. Hermes Agent users wake up to
@@ -132,6 +140,30 @@ agentburn explain --llm https://openrouter.ai/api/v1 \
 ```
 
 Privacy rules are hard-coded: the default endpoint is localhost (ollama / LM Studio); a remote endpoint requires `--yes-remote` and receives a **redacted** summary only — session titles become `session-N`, file paths shrink to basenames, message content is never in the payload to begin with. Works with any OpenAI-compatible API, zero new dependencies. (Yes — a cost profiler spending ~3K tokens to explain costs. The payload is compact and the answer capped; the irony is acknowledged.)
+
+**🔧 `agentburn fix` — from findings to ready config patches (dry-run by design).** Not "consider a cheaper model" but the exact file and the exact lines:
+
+```text
+🔧 agentburn fix — hermes · DRY-RUN (nothing was changed)
+
+   1. Point Hermes cron jobs at a cheap model
+      file   : ~/.hermes/cron/jobs.json
+      why    : cron is 79% of spend; maintenance rarely needs a frontier model.
+      effect : bulk of ≈$341/mo moves to cheap-model pricing
+      proposed:
+        "nightly digest": "model": "deepseek/deepseek-chat"
+      ⓘ field verified in hermes-agent cron/jobs.py: per-job `model` override
+```
+
+Patch generators exist only for config keys **verified against the agents' source code** (Hermes `cron/jobs.json`, OpenClaw `agents.defaults.heartbeat` incl. `activeHours` — the night-burn killer — and `lightContext`). There is no `--apply` on purpose: paste it yourself, then prove the saving with `--save-baseline` → `--compare`.
+
+**🔌 `agentburn mcp` — your agent answers for its own bill.** A zero-dependency MCP stdio server exposing `burn_report` / `burn_why` / `burn_card`. Register it and ask the agent *"where do you burn my money?"* — it calls the profiler on its own database and explains:
+
+```bash
+# Claude Code
+claude mcp add agentburn -- agentburn mcp
+# Hermes / OpenClaw: add an stdio MCP server with command `agentburn mcp`
+```
 
 **🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
 
