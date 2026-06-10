@@ -80,7 +80,8 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
 
     cost_total = a.total.cost or 0.0
     if a.by_source:
-        out.append(p.b("   WHERE IT BURNS (by source)"))
+        out.append(p.b("   WHERE IT BURNS"))
+        out.append(p.dim("   which part of your setup spends the money — scheduled jobs, messenger gateways, subagents or you"))
         for src, b in list(a.by_source.items())[:8]:
             share = (b.cost / cost_total) if cost_total > 0 else (b.tokens / a.total.tokens if a.total.tokens else 0)
             out.append(
@@ -113,13 +114,15 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
         out.append("")
 
     if a.tools:
-        out.append(p.b("   TOP TOOLS (result tokens carried into context)"))
+        out.append(p.b("   TOP TOOLS"))
+        out.append(p.dim("   whose results weigh most in your context — every later request re-pays for them"))
         for t in a.tools[:6]:
             out.append(f"   {t.name[:36]:<38} {fmt_tokens(t.result_tokens):>7}  {t.calls} calls")
         out.append("")
 
     if a.rollups:
-        out.append(p.b("   SUBAGENT ROLLUPS (delegation cost by root session)"))
+        out.append(p.b("   SUBAGENT ROLLUPS"))
+        out.append(p.dim("   what delegation actually cost, traced back to the session that started it"))
         for r in a.rollups:
             out.append(
                 f"   {r.title[:42]:<44} +{fmt_money(r.sub_cost, basis)} in {r.sub_sessions} subagent(s)"
@@ -129,7 +132,8 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
     if a.overhead_per_call:
         from .benchmarks import overhead_vs_reference
 
-        out.append(p.b("   FIXED OVERHEAD (avg input tokens per API call)"))
+        out.append(p.b("   FIXED OVERHEAD — avg input tokens per API call"))
+        out.append(p.dim("   the silent tax: tool definitions + system prompt re-sent with every single request"))
         ranked = sorted(a.overhead_per_call.items(), key=lambda kv: kv[1], reverse=True)
         for i, (src, v) in enumerate(ranked[:5]):
             flag = p.red(" ← heavy") if v >= 12000 else ""

@@ -10,7 +10,7 @@ from recursive subagent runs; one user measured that
 *"step 3 costs 4× step 1 — no alert, just a bill."* Built-in `/usage` shows totals.
 Nothing shows **where** it burns.
 
-agentburn is a local profiler for your agent's own accounting database. One command, zero dependencies, nothing leaves your machine:
+agentburn is a local profiler for your agent's own accounting data — **universal across agents**: Hermes Agent, OpenClaw and Claude Code today, one normalized model underneath. One command, zero dependencies, nothing leaves your machine:
 
 ```bash
 uvx agentburn          # or: pipx run agentburn / pip install agentburn
@@ -67,11 +67,13 @@ Everything runs locally and reads your database **read-only**. No network calls.
 ## Usage
 
 ```bash
-agentburn                  # autodetect agent, last 30 days
+agentburn                        # every agent on this machine, last 30 days
+agentburn --agent openclaw       # just one
 agentburn --days 7
-agentburn --db /path/to/state.db
-agentburn --night 23-7     # custom overnight window (local time)
-agentburn --json           # machine-readable, pipe it anywhere
+agentburn --agent hermes --db /path/to/state.db
+agentburn --night 23-7           # custom overnight window (local time)
+agentburn --budget-month 50 --fail-over   # sentinel for cron/CI
+agentburn --json                 # machine-readable, pipe it anywhere
 agentburn --no-color
 ```
 
@@ -93,15 +95,27 @@ heaviest overhead: telegram 20,000 tokens/call (community baseline ≈8k/call: +
 
 **🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
 
+**🚨 Sentinel mode — a budget guard for server agents.** Your agent runs 24/7 on a VPS; this watches it:
+
+```bash
+# alert when overnight burn exceeds $5/month pace (exit code 1 → any alerting hooks in)
+agentburn --agent openclaw --budget-night 5 --fail-over --no-color \
+  || notify-send "🚨 agent is burning money at night"
+```
+
+Drop it in cron next to the agent itself — the one-off check becomes a standing guard.
+
 ## Supported agents
 
-| Agent | Status | Data source |
-|---|---|---|
-| **Hermes Agent** | ✅ v0.1 | `~/.hermes/state.db` (+ optional `request_dump_*.json` for input composition) |
-| OpenClaw | roadmap | session JSONL |
-| Claude Code | roadmap | `~/.claude/projects/**.jsonl` |
+One normalized model, one adapter per agent. Run `agentburn` and every agent found on the machine gets its own report.
 
-The core is agent-agnostic (normalized session/event model); adapters are ~150 lines each. PRs welcome.
+| Agent | Status | Data source | Notes |
+|---|---|---|---|
+| **Hermes Agent** | ✅ | `~/.hermes/state.db` (+ optional request dumps) | costs from the agent's own accounting |
+| **OpenClaw** | ✅ | `~/.openclaw/agents/*/sessions/sessions.json` | **heartbeat is its own category** — the famous one; cron / gateways / subagents split out |
+| **Claude Code** | ✅ | `~/.claude/projects/**.jsonl` | tokens only, by design: CC doesn't record costs locally and subscription usage has no honest per-token price — we don't invent one |
+
+Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural next targets — PRs welcome.
 
 ## Related
 

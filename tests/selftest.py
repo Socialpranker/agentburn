@@ -228,6 +228,113 @@ def main():
     ok("doctor: ready-to-paste issue block", "### Token accounting gaps" in doc and "LOWER BOUND" in doc)
     ok("doctor: privacy note", "No message content" in doc)
 
+    print("openclaw adapter:")
+    from agentburn.adapters import openclaw
+
+    oc_root = os.path.join(tempfile.mkdtemp(), ".openclaw")
+    store_dir = os.path.join(oc_root, "agents", "main", "sessions")
+    os.makedirs(store_dir)
+    now_ms = time.time() * 1000
+    oc_store = {
+        "agent:main:main": {"sessionId": "m1", "model": "anthropic/claude-opus-x",
+                            "inputTokens": 100_000, "outputTokens": 20_000, "cacheRead": 5_000,
+                            "cacheWrite": 1_000, "estimatedCostUsd": 4.0,
+                            "sessionStartedAt": now_ms - 3600_000},
+        "cron:main-heartbeat-job": {"sessionId": "hb", "model": "anthropic/claude-opus-x",
+                                    "totalTokens": 900_000, "estimatedCostUsd": 18.0,
+                                    "sessionStartedAt": now_ms - 2 * 3600_000},
+        "agent:main:cron:digest:run:run-1": {"sessionId": "cr", "model": "deepseek/v3",
+                                             "inputTokens": 50_000, "outputTokens": 5_000,
+                                             "estimatedCostUsd": 1.0,
+                                             "sessionStartedAt": now_ms - 3 * 3600_000},
+        "agent:main:telegram:chat42": {"sessionId": "tg", "model": "deepseek/v3",
+                                       "inputTokens": 30_000, "outputTokens": 3_000,
+                                       "estimatedCostUsd": 0.5,
+                                       "sessionStartedAt": now_ms - 4 * 3600_000},
+        "agent:main:sub:abc": {"sessionId": "sb", "model": "deepseek/v3", "spawnDepth": 1,
+                               "parentSessionKey": "agent:main:main",
+                               "inputTokens": 10_000, "outputTokens": 1_000,
+                               "estimatedCostUsd": 0.2, "startedAt": now_ms - 3500_000},
+        "agent:main:old": {"sessionId": "old", "inputTokens": 1, "outputTokens": 1,
+                           "sessionStartedAt": now_ms - 90 * 86400_000},
+    }
+    with open(os.path.join(store_dir, "sessions.json"), "w") as f:
+        json.dump(oc_store, f)
+    oc = openclaw.load(db_path=oc_root, days=30)
+    ok("openclaw: sessions in window", len(oc.sessions) == 5)
+    srcs = {s.id: s.source for s in oc.sessions}
+    ok("openclaw: heartbeat is its own source", srcs["hb"] == "heartbeat")
+    ok("openclaw: cron / gateway / subagent / cli classified",
+       srcs["cr"] == "cron" and srcs["tg"] == "gateway:telegram"
+       and srcs["sb"] == "subagent" and srcs["m1"] == "cli")
+    ok("openclaw: undifferentiated total counted as input + warned",
+       next(s for s in oc.sessions if s.id == "hb").input_tokens == 900_000
+       and any("undifferentiated" in w for w in oc.warnings))
+    oa = analyze(oc)
+    ok("openclaw: heartbeat tops the burn", next(iter(oa.by_source)) == "heartbeat")
+
+    print("claude-code adapter:")
+    from agentburn.adapters import claude_code
+
+    cc_root = os.path.join(tempfile.mkdtemp(), "projects")
+    proj = os.path.join(cc_root, "-Users-me-myproj")
+    sub = os.path.join(proj, "11111111-2222-3333-4444-555555555555", "subagents")
+    os.makedirs(sub)
+    iso = lambda h: time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(time.time() - h * 3600))
+    main_lines = [
+        {"type": "user", "timestamp": iso(5), "message": {"role": "user", "content": "hi"}},
+        {"type": "assistant", "timestamp": iso(5),
+         "message": {"model": "claude-fable-5", "usage": {
+             "input_tokens": 1_000, "output_tokens": 500,
+             "cache_creation_input_tokens": 2_000, "cache_read_input_tokens": 40_000}}},
+        {"type": "assistant", "timestamp": iso(4),
+         "message": {"model": "claude-fable-5", "usage": {
+             "input_tokens": 1_200, "output_tokens": 700,
+             "cache_creation_input_tokens": 0, "cache_read_input_tokens": 60_000}}},
+    ]
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "w") as f:
+        f.write("\n".join(json.dumps(l) for l in main_lines))
+    with open(os.path.join(sub, "agent-deadbeef.jsonl"), "w") as f:
+        f.write(json.dumps({"type": "assistant", "timestamp": iso(4),
+                            "message": {"model": "claude-haiku", "usage": {
+                                "input_tokens": 300, "output_tokens": 100,
+                                "cache_creation_input_tokens": 0,
+                                "cache_read_input_tokens": 1_000}}}))
+    with open(os.path.join(proj, "not-a-session.jsonl"), "w") as f:
+        f.write("{}")  # must be ignored (no uuid name)
+    cc = claude_code.load(db_path=cc_root, days=30)
+    ok("claude-code: main + subagent parsed, junk ignored", len(cc.sessions) == 2)
+    mainrec = next(s for s in cc.sessions if s.source == "cli")
+    ok("claude-code: usage summed incl. cache", mainrec.input_tokens == 2_200
+       and mainrec.cache_read_tokens == 100_000 and mainrec.api_calls == 2)
+    subrec = next(s for s in cc.sessions if s.source == "subagent")
+    ok("claude-code: subagent linked to parent uuid",
+       subrec.parent_id == "11111111-2222-3333-4444-555555555555")
+    ok("claude-code: tokens-only honesty warning",
+       any("not dollars" in w for w in cc.warnings))
+    ca = analyze(cc)
+    ok("claude-code: cost basis unknown, tokens counted",
+       ca.cost_basis == "unknown" and ca.total.tokens > 100_000)
+
+    print("multi-agent cli + sentinel:")
+    import subprocess
+
+    env_db = os.path.join(tmp, "state.db")
+    r = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
+                        "--budget-night", "5", "--fail-over", "--no-color"],
+                       capture_output=True, text=True)
+    ok("sentinel: breach printed and exit 1", r.returncode == 1 and "exceeds budget" in r.stdout)
+    r2 = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
+                         "--budget-month", "99999", "--fail-over"],
+                        capture_output=True, text=True)
+    ok("sentinel: under budget → exit 0", r2.returncode == 0)
+    r3 = subprocess.run([sys.executable, "-m", "agentburn.cli", "--db", env_db],
+                        capture_output=True, text=True)
+    ok("--db without --agent is a clear error", r3.returncode == 2 and "--agent" in r3.stderr)
+
+    print("plain-language section subtitles:")
+    ok("report explains itself", "silent tax" in term2 and "spends the money" in term2)
+
     print(f"\nAll {PASSED} checks passed.")
 
 
