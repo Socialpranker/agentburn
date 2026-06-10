@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="410" viewBox="0 0 640 410" role="img" aria-label="agent burn card">
+<rect width="640" height="410" rx="16" fill="#0b0d10"/>
+<text x="28" y="42" font-size="13" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="500">agentburn</text>
+<text x="612" y="42" font-size="13" fill="#5c6670" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">hermes · last 30 days</text>
+<text x="28" y="104" font-size="42" fill="#e6e9ec" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="500">~$45.50</text>
+<text x="612" y="104" font-size="14" fill="#f5d76e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="500" text-anchor="end">≈ ~$416.91/mo at this pace</text>
+<rect x="28" y="126" width="584" height="1" fill="#242a31"/>
+<text x="28" y="156" font-size="12" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif">where it burns</text>
+<text x="28" y="180" font-size="14" fill="#e6e9ec" font-family="system-ui,-apple-system,Segoe UI,sans-serif">cron</text>
+<rect x="140" y="171" width="340" height="10" rx="5" fill="#1b2026"/>
+<rect x="140" y="171" width="269" height="10" rx="5" fill="#f7775a"/>
+<text x="612" y="180" font-size="13" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">79% · ~$36.00</text>
+<text x="28" y="210" font-size="14" fill="#e6e9ec" font-family="system-ui,-apple-system,Segoe UI,sans-serif">cli</text>
+<rect x="140" y="201" width="340" height="10" rx="5" fill="#1b2026"/>
+<rect x="140" y="201" width="29" height="10" rx="5" fill="#5ab0f7"/>
+<text x="612" y="210" font-size="13" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">9% · ~$4.00</text>
+<text x="28" y="240" font-size="14" fill="#e6e9ec" font-family="system-ui,-apple-system,Segoe UI,sans-serif">telegram</text>
+<rect x="140" y="231" width="340" height="10" rx="5" fill="#1b2026"/>
+<rect x="140" y="231" width="22" height="10" rx="5" fill="#f5d76e"/>
+<text x="612" y="240" font-size="13" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">7% · ~$3.00</text>
+<text x="28" y="270" font-size="14" fill="#e6e9ec" font-family="system-ui,-apple-system,Segoe UI,sans-serif">subagent</text>
+<rect x="140" y="261" width="340" height="10" rx="5" fill="#1b2026"/>
+<rect x="140" y="261" width="18" height="10" rx="5" fill="#c89bf7"/>
+<text x="612" y="270" font-size="13" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">5% · ~$2.50</text>
+<rect x="28" y="298" width="584" height="36" rx="10" fill="#f7775a" opacity="0.12"/>
+<text x="44" y="321" font-size="14" fill="#f7a08a" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-weight="500">🌙 while I slept (00–08): ~$36.00 — 79% of everything</text>
+<text x="28" y="360" font-size="12.5" fill="#8a949e" font-family="system-ui,-apple-system,Segoe UI,sans-serif">telegram re-sends 20,000 tokens with every call — 2.5× the community norm (≈8k)</text>
+<text x="28" y="388" font-size="12" fill="#5c6670" font-family="system-ui,-apple-system,Segoe UI,sans-serif">local &amp; private — nothing left my machine</text>
+<text x="612" y="388" font-size="12" fill="#5c6670" font-family="system-ui,-apple-system,Segoe UI,sans-serif" text-anchor="end">github.com/Socialpranker/agentburn</text>
+</svg>

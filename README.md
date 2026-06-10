@@ -94,6 +94,10 @@ where it burns: cron 79% · cli 9% · telegram 7% · subagent 5%
 — agentburn · local & private
 ```
 
+`--svg card.svg` renders it as an image:
+
+![sample burn card](assets/card-sample.svg)
+
 **📏 Calibration against public benchmarks.** "Is 15k input tokens per call normal?" The report compares your fixed overhead with community-measured references embedded as dated constants (e.g. the [Phala always-on-agent benchmark](https://phala.com/posts/understanding-openclaws-token-usage), 2026-03: ≈8k/call baseline). No network — sources are cited inline.
 
 **📐 Optimize → prove it (`--save-baseline` / `--compare`).** Snapshot your pace, change the config (cheaper cron model, trimmed toolsets), then `agentburn --compare` shows the delta in $/month — pace-normalized, so a 7-day baseline compares honestly with a 30-day window. Every recommendation becomes a testable promise.

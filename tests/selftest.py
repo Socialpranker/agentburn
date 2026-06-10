@@ -194,6 +194,14 @@ def main():
     ok("card: footer with repo + privacy", "local & private" in card)
     svg = share_svg(a)
     ok("svg card: valid-ish and anonymous", svg.startswith("<svg") and "refactor" not in svg and "$45.50" in svg)
+    ok("svg card: designed layout (bars, night strip, privacy footer)",
+       all(k in svg for k in ("where it burns", "while I slept", "nothing left my machine",
+                              'rx="16"', 'rx="5"')))
+    ok("svg card: semantic source colors (cron hot, cli blue)",
+       svg.index("#f7775a") < svg.index("#5ab0f7"))
+    import xml.dom.minidom as _md
+    _md.parseString(svg)
+    ok("svg card: well-formed XML", True)
 
     print("benchmarks in report:")
     ok("overhead line cites community baseline", "community baseline" in term or True)
