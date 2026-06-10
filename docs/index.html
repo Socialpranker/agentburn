@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentburn playground — try it in your browser</title>
+<meta name="description" content="Interactive simulation of agentburn: see where an AI agent burns money. No install, sample data.">
+<style>
+  :root { --bg:#0b0d10; --panel:#14181d; --border:#242a31; --t:#e6e9ec; --d:#8a949e; --dd:#5c6670;
+          --hot:#f7775a; --blue:#5ab0f7; --amber:#f5d76e; --purple:#c89bf7; --green:#7df0a8; --red:#f7a08a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--t);
+         font:15px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:28px 16px 60px; }
+  h1 { font-size:24px; margin:0; } h1 b { color:var(--hot); }
+  .sub { color:var(--d); margin:6px 0 18px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .chip { border:1px solid var(--border); background:var(--panel); color:var(--d); border-radius:999px;
+          padding:6px 14px; cursor:pointer; font-size:13px; font-family:ui-monospace,Menlo,monospace; }
+  .chip:hover { border-color:var(--hot); color:var(--t); }
+  .term { background:var(--bg); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .bar { background:var(--panel); padding:9px 14px; display:flex; align-items:center; gap:8px; }
+  .dot { width:11px; height:11px; border-radius:50%; }
+  .bar span:last-child { margin-left:auto; margin-right:auto; color:var(--dd); font-size:12px;
+        font-family:ui-monospace,Menlo,monospace; }
+  #out { padding:16px 18px; min-height:340px; max-height:60vh; overflow-y:auto;
+         font:13.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; white-space:pre-wrap; }
+  .in { display:flex; border-top:1px solid var(--border); padding:10px 18px; gap:8px;
+        font-family:ui-monospace,Menlo,monospace; }
+  .in span { color:var(--green); }
+  .in input { flex:1; background:none; border:none; outline:none; color:var(--t);
+              font:13.5px ui-monospace,Menlo,monospace; }
+  .t{color:var(--t)} .d{color:var(--d)} .dd{color:var(--dd)} .hot{color:var(--hot)} .blue{color:var(--blue)}
+  .amber{color:var(--amber)} .purple{color:var(--purple)} .green{color:var(--green)} .red{color:var(--red)}
+  .b{font-weight:700}
+  .note { color:var(--dd); font-size:13px; margin-top:14px; }
+  .note a { color:var(--blue); text-decoration:none; }
+  .install { margin-top:18px; background:var(--panel); border:1px solid var(--border); border-radius:10px;
+             padding:12px 16px; font-family:ui-monospace,Menlo,monospace; font-size:14px; }
+  .install b { color:var(--green); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>agent<b>burn</b> <span style="color:var(--dd);font-weight:400">/ playground</span></h1>
+  <p class="sub">A simulation with sample data — click a command or type it. The real tool runs locally
+     and reads your agent's own logs; nothing here is your data.</p>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="term">
+    <div class="bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <span>~ agentburn playground</span>
+    </div>
+    <div id="out"></div>
+    <div class="in"><span>$</span><input id="cmd" autocomplete="off" spellcheck="false"
+         placeholder="type a command — e.g. agentburn why — or click a chip above" autofocus></div>
+  </div>
+
+  <div class="install">try the real one: <b>uvx agentburn</b> &nbsp;<span style="color:var(--dd)">· zero deps · local-only · read-only</span></div>
+  <p class="note">Supports Hermes Agent, OpenClaw and Claude Code ·
+     <a href="https://github.com/Socialpranker/agentburn">GitHub</a> ·
+     <a href="https://github.com/Socialpranker/token-history">token-history (the world side)</a></p>
+</div>
+
+<script>
+const $$ = s => document.querySelector(s);
+const OUT = $$('#out');
+
+const L = {
+  report: [
+    ['b t','agentburn — hermes · last 30d'],
+    ['amber b','TL;DR: ≈ ~$431/mo pace; 79% of it is `cron`.'],
+    ['d','First fix: route night work to a cheaper model'],
+    ['',''],
+    ['b t','WHERE IT BURNS'],
+    ['t','cron      <span class="hot">████████████████████████████</span><span class="dd">··········</span>  <span class="d">79% · ~$36.00</span>'],
+    ['t','cli       <span class="blue">███</span><span class="dd">···································</span>  <span class="d"> 9% · ~$4.00</span>'],
+    ['t','telegram  <span class="amber">██</span><span class="dd">····································</span>  <span class="d"> 7% · ~$3.00</span>'],
+    ['t','subagent  <span class="purple">██</span><span class="dd">····································</span>  <span class="d"> 5% · ~$2.50</span>'],
+    ['',''],
+    ['red b','🌙 WHILE YOU SLEPT (00:00–08:00): ~$36.00 — 79% of spend'],
+    ['',''],
+    ['b t','💡 DO THIS'],
+    ['t','1. Point cron jobs at a cheap model      <span class="green">→ frees ≈$300/mo</span>'],
+    ['t','2. heartbeat.activeHours 09:00–24:00     <span class="green">→ night burn ≈ $0</span>'],
+    ['',''],
+    ['dd','Next:  agentburn why · agentburn fix · agentburn drift · agentburn rank'],
+  ],
+  why: [
+    ['b t','🔬 agentburn why — hermes'],
+    ['dd','what the agent actually did, from its own records — observations, not verdicts'],
+    ['',''],
+    ['b t','WHAT IT ACTUALLY DID — functions called'],
+    ['t','browser        34×  <span class="d">≈210K in results</span>'],
+    ['t','web_search     18×'],
+    ['t','shell           7×  <span class="red">2 errors</span>'],
+    ['',''],
+    ['b t','CRON RUNS — the per-run receipt'],
+    ['t','nightly digest   31 runs   ~$18.40   avg 41K/run'],
+    ['t','heartbeat        96 runs    ~$2.40   avg  1.2K/run  <span class="red">4 did nothing</span>'],
+    ['',''],
+    ['b t','RE-READ LOOPS'],
+    ['t','4× read_file(/proj/big.md)  ≈32K re-paid   <span class="amber">← same file, paid 4 times</span>'],
+    ['',''],
+    ['b t','RETRY STORMS'],
+    ['red','Bash: 3 errors / 6 calls — re-paid each time'],
+    ['',''],
+    ['b t','CONTEXT THRASH — compactions'],
+    ['red','3 compactions · each re-sends a near-full context window'],
+    ['',''],
+    ['b t','💡 WHAT TO CHANGE'],
+    ['t','1. cache big.md   2. fix Bash flags   3. heartbeat → cheap model'],
+  ],
+  telegram: [
+    ['b t','🔬 agentburn why — hermes · gateway:telegram'],
+    ['',''],
+    ['b t','WHAT IT ACTUALLY DID — functions called'],
+    ['t','browser        34×  <span class="d">≈210K in results</span>'],
+    ['t','web_search     18×'],
+    ['t','send_message   52×'],
+    ['',''],
+    ['b t','RE-READ LOOPS'],
+    ['t','5× browser(https://news.site/page)   <span class="amber">← same page, paid 5 times</span>'],
+    ['',''],
+    ['dd','this gateway re-sends 20,000 tokens with EVERY call — 2.5× the community norm (≈8k)'],
+  ],
+  fix: [
+    ['b t','🔧 agentburn fix — hermes · DRY-RUN (nothing was changed)'],
+    ['',''],
+    ['b t','1. Point Hermes cron jobs at a cheap model'],
+    ['d','   file   : ~/.hermes/cron/jobs.json'],
+    ['d','   why    : cron is 79% of spend'],
+    ['green','   effect : ≈$341/mo → ≈$4/mo = saves ≈$337/mo (snapshot 2026-06-10)'],
+    ['t','   proposed:  <span class="green">"nightly digest": "model": "deepseek/deepseek-chat"</span>   <span class="green">← paste-ready</span>'],
+    ['',''],
+    ['b t','2. Tame the OpenClaw heartbeat'],
+    ['green','   "activeHours": { "start": "09:00", "end": "24:00" }   <span class="red">← the night-burn killer</span>'],
+    ['green','   "lightContext": true'],
+    ['',''],
+    ['dd','ⓘ keys verified against the agents’ source code'],
+    ['dd','apply by hand, then prove it: --save-baseline → paste → --compare'],
+  ],
+  drift: [
+    ['b t','🧭 agentburn drift — your spend × the world’s direction'],
+    ['',''],
+    ['b t','YOUR MODELS vs THE WORLD (4-week world trend)'],
+    ['t','anthropic/claude-opus-4.6       ~$341/mo    <span class="red">world -41% ⬊</span>'],
+    ['t','deepseek/deepseek-v3.2           ~$12/mo    <span class="d">world +12% →</span>'],
+    ['',''],
+    ['b t','💡 DRIFT ALERTS'],
+    ['red','1. claude-opus-4.6: you spend ~$341/mo; world usage -41% in 4 weeks — the world'],
+    ['red','   is leaving this model. Rising alternative step-3.5-flash (+180%) is ~98% cheaper.'],
+    ['',''],
+    ['dd','your data never leaves this machine; drift only GETs public trend JSON'],
+  ],
+  rank: [
+    ['b t','📊 agentburn rank — you vs the Burn Index'],
+    ['dd','anonymous community percentiles of EFFICIENCY — nothing here rewards burning more'],
+    ['',''],
+    ['t','input tokens per call · cli           you:  15,000   median:  6,200   <span class="red">worse than ~75% of 41</span>'],
+    ['t','share of spend at night               you:   79.0%   median:  12.0%   <span class="red">worse than ~90% of 41</span>'],
+    ['t','cache-read share of input volume      you:   61.0%   median:  44.0%   <span class="green">better than ~75% of 41</span>'],
+    ['',''],
+    ['dd','join it (anonymized, you review first): agentburn --submit'],
+  ],
+  share: [
+    ['t','🔥 my hermes agent · last 30d'],
+    ['t','~$45.50 → ~$430/mo pace · 1.75M tokens'],
+    ['t','where it burns: cron 79% · cli 9% · telegram 7% · subagent 5%'],
+    ['red','🌙 while I slept (00–08): ~$36.00 — 79% of everything'],
+    ['t','⚙️ telegram re-sends 20,000 tokens with EVERY call — 2.5× the community norm (≈8k)'],
+    ['dd','— agentburn · local & private'],
+  ],
+  doctor: [
+    ['b t','🩺 agentburn doctor — hermes accounting health'],
+    ['',''],
+    ['t','sessions inspected : 212'],
+    ['t','zero-usage sessions: 14  <span class="d">(messages exist, tokens recorded = 0)</span>'],
+    ['',''],
+    ['b t','ZERO-USAGE BY (provider × model × source):'],
+    ['t','  9 × openrouter · minimax/m2 · gateway:discord'],
+    ['',''],
+    ['amber','Until fixed upstream, every agentburn total is a LOWER BOUND.'],
+    ['dd','── ready-to-paste upstream bug report follows in the real tool ──'],
+  ],
+  help: [
+    ['t','commands: <span class="amber">agentburn</span> · <span class="amber">agentburn why</span> · <span class="amber">agentburn why --source telegram</span>'],
+    ['t','          <span class="amber">agentburn fix</span> · <span class="amber">agentburn drift</span> · <span class="amber">agentburn rank</span> · <span class="amber">agentburn --share</span> · <span class="amber">agentburn doctor</span>'],
+    ['dd','this is a simulation with sample data — the real one: uvx agentburn'],
+  ],
+};
+
+const CMDS = [
+  ['agentburn', 'report'], ['agentburn why', 'why'], ['agentburn why --source telegram', 'telegram'],
+  ['agentburn fix', 'fix'], ['agentburn drift', 'drift'], ['agentburn rank', 'rank'],
+  ['agentburn --share', 'share'], ['agentburn doctor', 'doctor'],
+];
+
+let busy = false;
+function el(html) { const div = document.createElement('div'); div.innerHTML = html; return div; }
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function run(cmd, key) {
+  if (busy) return;
+  busy = true;
+  const prompt = el('<span class="green">$ </span><span class="t"></span>');
+  OUT.appendChild(prompt);
+  const span = prompt.children[1];
+  for (const ch of cmd) { span.textContent += ch; await sleep(22); OUT.scrollTop = OUT.scrollHeight; }
+  await sleep(180);
+  const lines = L[key] || L.help;
+  for (const [cls, html] of lines) {
+    OUT.appendChild(el(`<span class="${cls}">${html}</span>`));
+    OUT.scrollTop = OUT.scrollHeight;
+    await sleep(55);
+  }
+  OUT.appendChild(el('&nbsp;'));
+  OUT.scrollTop = OUT.scrollHeight;
+  busy = false;
+}
+
+function resolve(input) {
+  const s = input.trim().toLowerCase();
+  if (!s) return null;
+  if (s.includes('telegram') || s.includes('--source')) return ['agentburn why --source telegram', 'telegram'];
+  for (const [cmd, key] of [...CMDS].reverse()) {
+    const tail = cmd.replace('agentburn', '').trim();
+    if (tail && s.includes(tail.replace('--',''))) return [cmd, key];
+  }
+  if (s.includes('help') || s === '?') return [input.trim(), 'help'];
+  if (s.includes('agentburn') || s === 'uvx agentburn') return ['agentburn', 'report'];
+  return [input.trim(), 'help'];
+}
+
+const chips = $$('#chips');
+for (const [cmd, key] of CMDS) {
+  const c = document.createElement('div');
+  c.className = 'chip';
+  c.textContent = cmd;
+  c.onclick = () => run(cmd, key);
+  chips.appendChild(c);
+}
+$$('#cmd').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    const r = resolve(e.target.value);
+    e.target.value = '';
+    if (r) run(r[0], r[1]);
+  }
+});
+run('uvx agentburn', 'report');
+</script>
+</body>
+</html>

@@ -22,6 +22,8 @@
 uvx agentburn
 ```
 
+**[▶ &nbsp;Try it in your browser — no install](https://socialpranker.github.io/agentburn/)**
+
 </div>
 
 ---
