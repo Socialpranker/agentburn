@@ -32,9 +32,11 @@ def recommend(a: Analysis) -> list:
             "gateway autonomy; route night work to a cheaper model."
         )
 
-    # 2. cron on an expensive model
+    # 2. cron on an expensive model — with real-price arithmetic when possible
     cron = a.by_source.get("cron")
     if cron and cost > 0 and cron.cost / cost >= 0.15:
+        from . import prices
+
         cron_models = [
             m for m, b in a.by_model.items() if any(h in (m or "").lower() for h in EXPENSIVE_HINTS)
         ]
@@ -45,9 +47,18 @@ def recommend(a: Analysis) -> list:
             if cron_models
             else ""
         )
+        saving = ""
+        if a.span_days and cron.input_tokens + cron.output_tokens > 0:
+            f = 30.0 / a.span_days
+            cheap = prices.cheap_cost_usd(cron.input_tokens * f, cron.output_tokens * f)
+            if monthly > cheap > 0:
+                saving = (
+                    f" Switching them to {prices.CHEAP_REFERENCE} ≈ {_money(cheap)}/mo "
+                    f"→ saves ≈{_money(monthly - cheap)}/mo (price snapshot {prices.AS_OF})."
+                )
         recs.append(
             f"Scheduled (cron) sessions are {cron.cost / cost:.0%} of spend "
-            f"(≈{_money(monthly)}/mo).{hint} Point cron jobs at a cheap model in config."
+            f"(≈{_money(monthly)}/mo).{hint} Point cron jobs at a cheap model in config.{saving}"
         )
 
     # 3. fixed overhead per call

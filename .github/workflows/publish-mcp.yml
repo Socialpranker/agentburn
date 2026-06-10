@@ -1,0 +1,43 @@
+name: publish-mcp
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write # OIDC auth to the MCP registry — no secrets needed
+  contents: read
+
+jobs:
+  publish-mcp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version from tag
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp
+          mv server.tmp server.json
+          cat server.json
+
+      - name: Wait for the package on PyPI (registry validates it there)
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          for i in $(seq 1 40); do
+            if curl -fsS "https://pypi.org/pypi/agentburn/$VERSION/json" >/dev/null 2>&1; then
+              echo "PyPI has agentburn $VERSION"; exit 0
+            fi
+            echo "waiting for PyPI ($i/40)…"; sleep 15
+          done
+          echo "PyPI never showed $VERSION"; exit 1
+
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+
+      - name: Authenticate to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

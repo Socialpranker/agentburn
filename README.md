@@ -164,6 +164,8 @@ claude mcp add agentburn -- agentburn mcp
 # Hermes / OpenClaw: add an stdio MCP server with command `agentburn mcp`
 ```
 
+Prefer skills? There's a ready [`SKILL.md`](skill/README.md) — drop it into `~/.hermes/skills/agentburn/`, `~/.openclaw/skills/agentburn/` or `~/.claude/skills/agentburn/` and just ask the agent *"where do you burn my money?"*.
+
 **🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
 
 **🚨 Sentinel mode — a budget guard for server agents.** Your agent runs 24/7 on a VPS; this watches it:
@@ -197,6 +199,8 @@ Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural ne
 ## License
 
 MIT
+
+<sub>mcp-name: io.github.Socialpranker/agentburn</sub>
 
 ---
 

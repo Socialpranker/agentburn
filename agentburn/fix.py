@@ -66,6 +66,18 @@ def build_fixes(agent: str, source_path: str, a: Analysis, brep=None) -> list:
             jobs_path = os.path.join(root, "cron", "jobs.json")
             jobs = _hermes_jobs(_read_json(jobs_path) or [])
             cron_monthly = monthly * (cron.cost / cost_total)
+            impact = f"bulk of ≈{fmt_money(cron_monthly, a.cost_basis)}/mo moves to cheap-model pricing"
+            if a.span_days and cron.input_tokens + cron.output_tokens > 0:
+                from . import prices
+
+                f = 30.0 / a.span_days
+                cheap = prices.cheap_cost_usd(cron.input_tokens * f, cron.output_tokens * f)
+                if cron_monthly > cheap > 0:
+                    impact = (
+                        f"≈{fmt_money(cron_monthly, a.cost_basis)}/mo → ≈{fmt_money(cheap)}/mo at "
+                        f"{prices.CHEAP_REFERENCE} prices = saves ≈{fmt_money(cron_monthly - cheap)}/mo "
+                        f"(snapshot {prices.AS_OF})"
+                    )
             cur_lines, prop_lines = [], []
             for j in jobs[:5]:
                 name = str(j.get("name") or j.get("id") or "job")[:40]
@@ -77,7 +89,7 @@ def build_fixes(agent: str, source_path: str, a: Analysis, brep=None) -> list:
                 target=jobs_path,
                 target_exists=os.path.exists(jobs_path),
                 why=f"cron is {cron.cost / cost_total:.0%} of spend; scheduled maintenance rarely needs a frontier model.",
-                impact=f"bulk of ≈{fmt_money(cron_monthly, a.cost_basis)}/mo moves to cheap-model pricing",
+                impact=impact,
                 current="\n".join(cur_lines) or "(no jobs parsed — open the file and check the `model` field per job)",
                 proposed="\n".join(prop_lines)
                 or f'set "model": "{CHEAP_MODEL_HINT}" per job (any cheap model)',

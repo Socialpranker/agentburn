@@ -591,6 +591,39 @@ def main():
     ok("fix: claude-code → honest 'no applicable patches'",
        r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
 
+    print("prices (real snapshot):")
+    from agentburn import prices
+
+    ok("lookup: date suffix stripped", prices.lookup("deepseek/deepseek-v3.2-20251201") == (0.269, 0.4))
+    ok("lookup: reordered anthropic slug",
+       prices.lookup("anthropic/claude-4.6-opus-20260205") == (5.0, 25.0))
+    ok("lookup: unknown → None", prices.lookup("nobody/mystery-model") is None)
+    ok("cheap reference priced", prices.cheap_cost_usd(1e6, 1e6) == 0.32 + 0.89)
+    h3 = hermes.load(db_path=env_db, days=30)
+    a3 = analyze(h3)
+    recs3 = recommend(a3)
+    cron_rec = next(r for r in recs3 if "Scheduled (cron)" in r)
+    ok("recommend: cron rule cites real-price saving",
+       "saves ≈$" in cron_rec and f"price snapshot {prices.AS_OF}" in cron_rec)
+    r_fix2 = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
+                             "--db", env_db, "--no-color"], capture_output=True, text=True)
+    ok("fix: impact uses price snapshot arithmetic", f"snapshot {prices.AS_OF}" in r_fix2.stdout
+       and "saves ≈$" in r_fix2.stdout)
+
+    print("skill + server.json:")
+    root = os.path.join(os.path.dirname(__file__), "..")
+    skill = open(os.path.join(root, "skill", "agentburn", "SKILL.md")).read()
+    ok("skill: frontmatter + honesty rules",
+       skill.startswith("---") and "name: agentburn" in skill and "LOWER BOUND" in skill)
+    srv = json.load(open(os.path.join(root, "server.json")))
+    ok("server.json: registry shape", srv["name"] == "io.github.Socialpranker/agentburn"
+       and srv["packages"][0]["registryType"] == "pypi"
+       and srv["packages"][0]["transport"]["type"] == "stdio"
+       and srv["packages"][0]["packageArguments"][0]["value"] == "mcp")
+    readme = open(os.path.join(root, "README.md")).read()
+    ok("README carries mcp-name for PyPI validation",
+       "mcp-name: io.github.Socialpranker/agentburn" in readme)
+
     print(f"\nAll {PASSED} checks passed.")
 
 

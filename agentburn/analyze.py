@@ -15,6 +15,7 @@ class Bucket:
     api_calls: int = 0
     tokens: int = 0
     input_tokens: int = 0
+    output_tokens: int = 0
     cost: float = 0.0
     cost_known: bool = False
 
@@ -23,6 +24,7 @@ class Bucket:
         self.api_calls += s.api_calls
         self.tokens += s.total_tokens
         self.input_tokens += s.input_tokens
+        self.output_tokens += s.output_tokens
         if s.cost_usd is not None:
             self.cost += s.cost_usd
             self.cost_known = True
@@ -57,6 +59,7 @@ class Analysis:
     composition: object
     cost_basis: str  # actual | estimated | mixed | unknown
     zero_token_sessions: int
+    span_days: Optional[float]
     daily_cost: Optional[float]
     monthly_projection: Optional[float]
     warnings: list = field(default_factory=list)
@@ -174,6 +177,7 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
         composition=snap.composition,
         cost_basis=cost_basis,
         zero_token_sessions=zero_token,
+        span_days=span_days,
         daily_cost=daily,
         monthly_projection=daily * 30 if daily is not None else None,
         warnings=warnings,
