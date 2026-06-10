@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentburn"
+version = "0.1.0"
+description = "Where does your AI agent burn money? Local token/cost profiler for always-on agents (Hermes Agent first). Zero dependencies."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Ion" }]
+keywords = ["hermes-agent", "tokens", "cost", "profiler", "ai-agents", "openrouter"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/Socialpranker/agentburn"
+
+[project.scripts]
+agentburn = "agentburn.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["agentburn*"]
