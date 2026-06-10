@@ -166,6 +166,25 @@ def analyze_behavior(snap: Snapshot, top: int = 6) -> BehaviorReport:
     return rep
 
 
+def behavior_json(rep: BehaviorReport) -> dict:
+    from dataclasses import asdict
+
+    return {
+        "agentburn_why": 1,
+        "agent": rep.agent,
+        "rereads": [asdict(r) for r in rep.rereads],
+        "storms": [asdict(s) for s in rep.storms],
+        "idle_heartbeats": {"idle": rep.idle_heartbeats[0], "total": rep.idle_heartbeats[1],
+                            "cost": rep.idle_heartbeats[2]},
+        "failure_cost": {"sessions": rep.failure_cost[0], "cost": rep.failure_cost[1],
+                         "tokens": rep.failure_cost[2], "examples": rep.failure_cost[3]},
+        "reasoning_heavy": [{"session": t, "share": round(s, 3), "tokens": k}
+                            for t, s, k in rep.reasoning_heavy],
+        "observations": rep.observations,
+        "notes": rep.notes,
+    }
+
+
 def render_behavior(rep: BehaviorReport, color: bool = True) -> str:
     b = (lambda s: f"\033[1m{s}\033[0m") if color else (lambda s: s)
     dim = (lambda s: f"\033[2m{s}\033[0m") if color else (lambda s: s)

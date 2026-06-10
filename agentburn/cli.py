@@ -36,10 +36,22 @@ def parse_night(s: str) -> tuple:
         raise argparse.ArgumentTypeError("night window must look like 0-8 or 23-7")
 
 
+RECIPES = """examples:
+  agentburn                          every agent on this machine, last 30 days
+  agentburn why                      behavioral forensics: loops, retry storms, idle runs
+  agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
+  agentburn --save-baseline          snapshot → optimize config → agentburn --compare
+  agentburn doctor                   accounting health + ready-to-paste upstream bug report
+  agentburn --budget-night 5 --fail-over   cron guard: exit 1 when night burn exceeds $5/mo
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="agentburn",
         description="Where does your AI agent burn money? Local profiler, zero deps, nothing leaves your machine.",
+        epilog=RECIPES,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("command", nargs="?", choices=["report", "doctor", "why"], default="report",
                     help="report (default) · why (behavioral forensics: loops, storms, idle heartbeats, "
@@ -48,6 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
     ap.add_argument("--days", type=int, default=30, help="analysis window in days (default 30; 0 = all time)")
+    ap.add_argument("--today", action="store_true", help="shortcut for --days 1")
+    ap.add_argument("--week", action="store_true", help="shortcut for --days 7")
     ap.add_argument("--night", type=parse_night, default=(0, 8), help="'while you slept' window, e.g. 0-8 (local)")
     ap.add_argument("--dumps-dir", default=None, help="hermes: directory with request_dump_*.json")
     ap.add_argument("--share", action="store_true", help="print an anonymized burn card (safe to post)")
@@ -117,9 +131,21 @@ def sentinel_breaches(a, args) -> list:
     return out
 
 
+def _ansi_ok() -> bool:
+    import os
+
+    if os.name != "nt":
+        return True
+    return bool(os.environ.get("WT_SESSION") or os.environ.get("ANSICON") or os.environ.get("TERM"))
+
+
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    color = sys.stdout.isatty() and not args.no_color
+    if args.today:
+        args.days = 1
+    elif args.week:
+        args.days = 7
+    color = sys.stdout.isatty() and not args.no_color and _ansi_ok()
 
     single_modes = args.command == "doctor" or args.share or args.save_baseline or args.compare
     # `why`, like `report`, runs across every detected agent
@@ -138,10 +164,21 @@ def main(argv=None) -> int:
             return 0
 
         if args.command == "why":
-            from .behavior import analyze_behavior, render_behavior
+            from .behavior import analyze_behavior, behavior_json, render_behavior
 
-            for n in found:
-                print(render_behavior(analyze_behavior(load(n)), color=color))
+            if len(found) > 1 and not args.json:
+                print(("\033[2m" if color else "") + f"Found {len(found)} agents: {', '.join(found)} — "
+                      "one forensics report each." + ("\033[0m" if color else ""))
+            reports = [analyze_behavior(load(n)) for n in found]
+            if args.json:
+                import json as _json
+
+                payloads = [behavior_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_behavior(r, color=color))
             return 0
 
         analyses = [analyze(load(n), night_window=args.night) for n in found]
@@ -178,6 +215,10 @@ def main(argv=None) -> int:
             print(f"\nSVG card → {args.svg}", file=sys.stderr)
         return 0
 
+    if len(found) > 1 and not args.json:
+        print(("\033[2m" if color else "") + f"Found {len(found)} agents: {', '.join(found)} — "
+              "one report each." + ("\033[0m" if color else ""))
+
     breaches = []
     if args.json:
         import json as _json
@@ -196,9 +237,31 @@ def main(argv=None) -> int:
                 print()
             breaches += b
 
+    if not args.json:
+        _next_hints(args, color)
+
     if breaches and args.fail_over:
         return 1
     return 0
+
+
+def _next_hints(args, color: bool) -> None:
+    """Guided journey: tell the user what this tool can do next — contextually."""
+    import os
+
+    from . import baseline
+
+    dim = (lambda s: f"\033[2m{s}\033[0m") if color else (lambda s: s)
+    hints = ["agentburn why            → WHY it burns: loops, retry storms, idle runs"]
+    if not os.path.exists(args.baseline_file or baseline.DEFAULT_PATH):
+        hints.append("agentburn --save-baseline → snapshot now, prove your savings after you optimize")
+    else:
+        hints.append("agentburn --compare       → how does today compare to your saved baseline?")
+    hints.append("agentburn --share         → anonymized burn card, safe to post")
+    print(dim("   Next:"))
+    for h in hints[:3]:
+        print(dim(f"   {h}"))
+    print()
 
 
 if __name__ == "__main__":

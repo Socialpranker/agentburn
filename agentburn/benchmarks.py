@@ -29,6 +29,14 @@ HERMES_4379 = {
 REFERENCE_BASELINE = PHALA_2026_03["baseline_tokens_per_call"]
 
 
+def overhead_vs_reference_short(avg_input_per_call: int) -> str:
+    """Card-friendly: '2.5× the community norm (≈8k)' — no nested citations."""
+    if avg_input_per_call <= 0:
+        return ""
+    ratio = avg_input_per_call / REFERENCE_BASELINE
+    return f"{ratio:.1f}× the community norm (≈{REFERENCE_BASELINE // 1000}k)"
+
+
 def overhead_vs_reference(avg_input_per_call: int) -> str:
     """One-line calibration against the community baseline."""
     if avg_input_per_call <= 0:

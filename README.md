@@ -19,6 +19,9 @@ uvx agentburn          # or: pipx run agentburn / pip install agentburn
 ```text
 🔥 agentburn — hermes · last 30d
 
+   TL;DR: ≈ ~$431/mo pace; 79% of it is `cron`.
+   First fix: 79% of spend happens at night — route night work to a cheaper model
+
    ~$45.50 total · 1.75M tokens · 7 sessions · 123 API calls
    ≈ ~$431.24/month at the current pace
 
@@ -84,10 +87,11 @@ agentburn --no-color
 
 ```text
 🔥 my hermes agent · last 30d
-~$45.50 · 1.75M tokens → ~$430/mo pace
-cron 79% · cli 9% · telegram 7% · subagent 5%
-🌙 while I slept (00–08): ~$36.00 (79%)
-heaviest overhead: telegram 20,000 tokens/call (community baseline ≈8k/call: +150%)
+~$45.50 → ~$430/mo pace · 1.75M tokens
+where it burns: cron 79% · cli 9% · telegram 7% · subagent 5%
+🌙 while I slept (00–08): ~$36.00 — 79% of everything
+⚙️ telegram re-sends 20,000 tokens with EVERY call — 2.5× the community norm (≈8k)
+— agentburn · local & private
 ```
 
 **📏 Calibration against public benchmarks.** "Is 15k input tokens per call normal?" The report compares your fixed overhead with community-measured references embedded as dated constants (e.g. the [Phala always-on-agent benchmark](https://phala.com/posts/understanding-openclaws-token-usage), 2026-03: ≈8k/call baseline). No network — sources are cited inline.

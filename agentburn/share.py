@@ -8,13 +8,14 @@ or message content — safe to paste into a public post.
 from __future__ import annotations
 
 from .analyze import Analysis
-from .benchmarks import REFERENCE_BASELINE, overhead_vs_reference
+from .benchmarks import overhead_vs_reference_short
 from .report import fmt_money, fmt_tokens
 
 REPO = "github.com/Socialpranker/agentburn"
 
 
 def share_text(a: Analysis) -> str:
+    """One clear thought per line, no nested parentheses, no jargon."""
     basis = a.cost_basis
     days = f"last {a.days}d" if a.days else "all time"
     lines = [f"🔥 my {a.agent} agent · {days}"]
@@ -25,7 +26,7 @@ def share_text(a: Analysis) -> str:
         if a.monthly_projection is not None
         else ""
     )
-    lines.append(f"{total} · {fmt_tokens(a.total.tokens)} tokens{pace}")
+    lines.append(f"{total}{pace} · {fmt_tokens(a.total.tokens)} tokens")
 
     cost_total = a.total.cost or 0.0
     if cost_total > 0 and a.by_source:
@@ -35,27 +36,29 @@ def share_text(a: Analysis) -> str:
             if b.cost > 0
         ]
         if shares:
-            lines.append(" · ".join(shares))
+            lines.append("where it burns: " + " · ".join(shares))
 
     if a.night.sessions > 0 and cost_total > 0:
+        share = a.night.cost / cost_total
         lines.append(
             f"🌙 while I slept ({a.night_window[0]:02d}–{a.night_window[1]:02d}): "
-            f"{fmt_money(a.night.cost, basis)} ({a.night.cost / cost_total:.0%})"
+            f"{fmt_money(a.night.cost, basis)} — {share:.0%} of everything"
         )
 
     if a.overhead_per_call:
         src, v = max(a.overhead_per_call.items(), key=lambda kv: kv[1])
         if v > 0:
+            ref = overhead_vs_reference_short(v)
             lines.append(
-                f"heaviest overhead: {src.replace('gateway:', '')} {v:,} tokens/call "
-                f"({overhead_vs_reference(v)})"
+                f"⚙️ {src.replace('gateway:', '')} re-sends {v:,} tokens with EVERY call"
+                + (f" — {ref}" if ref else "")
             )
 
     top_model = next(iter(a.by_model), None)
     if top_model and top_model != "unknown":
         lines.append(f"top model: {top_model}")
 
-    lines.append(f"— profiled locally with agentburn · {REPO}")
+    lines.append(f"— agentburn · local & private · {REPO}")
     return "\n".join(lines)
 
 

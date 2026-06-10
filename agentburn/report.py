@@ -57,6 +57,31 @@ def _bar(share: float, width: int = 18) -> str:
     return "█" * n + "·" * (width - n)
 
 
+def _tldr(a: Analysis, recs: list) -> list:
+    """Two plain sentences a hurried human actually reads."""
+    if a.total.tokens == 0:
+        return []
+    bits = []
+    if a.monthly_projection is not None:
+        bits.append(f"≈{fmt_money(a.monthly_projection, a.cost_basis)}/mo pace")
+    else:
+        bits.append(f"{fmt_tokens(a.total.tokens)} tokens in the window")
+    cost_total = a.total.cost or 0.0
+    if a.by_source:
+        src, b = next(iter(a.by_source.items()))
+        share = (b.cost / cost_total) if cost_total > 0 else (
+            b.tokens / a.total.tokens if a.total.tokens else 0
+        )
+        if share >= 0.35:
+            bits.append(f"{share:.0%} of it is `{src}`")
+    line1 = "; ".join(bits) + "."
+    lines = [line1]
+    if recs:
+        first = recs[0].split(" — ")[0].split(". ")[0].strip()
+        lines.append(f"First fix: {first[:130]}{'…' if len(first) > 130 else ''}")
+    return lines
+
+
 def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
     p = P(color)
     out = []
@@ -67,6 +92,18 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
     out.append(p.b(f"🔥 agentburn — {a.agent} · {days_str}"))
     out.append(p.dim(f"   {a.source_path}"))
     out.append("")
+    tldr = _tldr(a, recs)
+    if tldr:
+        out.append("   " + p.b("TL;DR: ") + tldr[0])
+        for extra in tldr[1:]:
+            out.append("   " + p.yellow(extra))
+        out.append("")
+    if a.total.tokens == 0:
+        out.append(p.yellow(
+            "   Nothing recorded in this window. Try `--days 0` (all time), "
+            "or `agentburn doctor` to check the agent's accounting."
+        ))
+        out.append("")
     out.append(
         f"   {p.b(fmt_money(a.total.cost if a.total.cost_known else None, basis))} total"
         f" · {fmt_tokens(a.total.tokens)} tokens · {a.total.sessions} sessions"

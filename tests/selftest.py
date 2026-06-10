@@ -188,9 +188,10 @@ def main():
 
     card = share_text(a)
     ok("card: has totals and night line", "$45.50" in card and "while I slept" in card)
-    ok("card: benchmark calibration present", "community baseline" in card)
+    ok("card: benchmark calibration, human phrasing", "community norm" in card and "EVERY call" in card)
+    ok("card: one thought per line, no nested parens", "((" not in card and ") (" not in card)
     ok("card: NO session titles leak", "nightly digest" not in card and "refactor" not in card)
-    ok("card: footer with repo", "agentburn" in card)
+    ok("card: footer with repo + privacy", "local & private" in card)
     svg = share_svg(a)
     ok("svg card: valid-ish and anonymous", svg.startswith("<svg") and "refactor" not in svg and "$45.50" in svg)
 
@@ -417,6 +418,28 @@ def main():
     r_why = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
                             "--db", env_db, "--no-color"], capture_output=True, text=True)
     ok("cli why: runs and reports the loop", r_why.returncode == 0 and "read_file" in r_why.stdout)
+
+    print("v0.5 UX:")
+    r_rep = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
+                            "--db", env_db, "--no-color"], capture_output=True, text=True)
+    ok("TL;DR opens the report", "TL;DR:" in r_rep.stdout and "/mo pace" in r_rep.stdout)
+    ok("TL;DR names the dominant source", "`cron`" in r_rep.stdout)
+    ok("First fix surfaced", "First fix:" in r_rep.stdout)
+    ok("Next hints close the report",
+       "Next:" in r_rep.stdout and "agentburn why" in r_rep.stdout and "--save-baseline" in r_rep.stdout)
+    r_wj = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
+                           "--db", env_db, "--json"], capture_output=True, text=True)
+    wj = json.loads(r_wj.stdout)
+    ok("why --json: parses with findings", wj["agentburn_why"] == 1 and len(wj["rereads"]) >= 1)
+    r_week = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
+                             "--db", env_db, "--week", "--json"], capture_output=True, text=True)
+    ok("--week sets a 7-day window", json.loads(r_week.stdout)["days"] == 7)
+
+    from agentburn.report import _tldr
+    from agentburn.analyze import Bucket, Analysis as _A
+    empty = analyze(type(snap)(agent="hermes", source_path="x", generated_at=time.time(), days=30))
+    ok("empty window → no TL;DR, friendly hint in render",
+       _tldr(empty, []) == [] and "Nothing recorded" in render_terminal(empty, [], color=False))
 
     print(f"\nAll {PASSED} checks passed.")
 
