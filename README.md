@@ -140,6 +140,24 @@ agentburn explain --llm https://openrouter.ai/api/v1 \
 
 Privacy rules are hard-coded: the default endpoint is localhost (ollama / LM Studio); a remote endpoint requires `--yes-remote` and receives a **redacted** summary only — session titles become `session-N`, file paths shrink to basenames, message content is never in the payload to begin with. Works with any OpenAI-compatible API, zero new dependencies. (Yes — a cost profiler spending ~3K tokens to explain costs. The payload is compact and the answer capped; the irony is acknowledged.)
 
+**🧭 `agentburn drift` — your spend × the world's direction.** Are you paying for a model the world is leaving?
+
+```text
+🧭 agentburn drift
+
+   YOUR MODELS vs THE WORLD (4-week world trend)
+   anthropic/claude-opus-4.6        ~$341/mo    world -41% ⬊
+   deepseek/deepseek-v3.2            ~$12/mo    world +12% →
+
+   💡 DRIFT ALERTS
+   1. claude-opus-4.6: you spend ~$341/mo; world usage -41% in 4 weeks — the world
+      is leaving this model. Rising alternative step-3.5-flash (+180%) is ~98% cheaper.
+```
+
+Your side is computed locally from the agents' own logs; the world side is one read-only GET of [token-history](https://github.com/Socialpranker/token-history)'s public trend JSON (archived daily from OpenRouter's rankings — deep history unlocks as the archive grows). Nothing about you is sent anywhere; `--trends FILE` works fully offline. Nobody else joins these two halves.
+
+**🩺 `agentburn why` additions:** **CRON RUNS** — the per-run receipt for every scheduled job (what [openclaw #24636](https://github.com/openclaw/openclaw/issues/24636) keeps asking for), and **CONTEXT THRASH** — compactions counted per session, because every compaction silently re-sends a near-full context window.
+
 **🔧 `agentburn fix` — from findings to ready config patches (dry-run by design).** Not "consider a cheaper model" but the exact file and the exact lines:
 
 ```text

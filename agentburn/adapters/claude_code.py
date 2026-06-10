@@ -58,16 +58,20 @@ def _parse_ts(v) -> Optional[float]:
 
 
 def _scan_file(path: str, sid: str, events: list):
-    """→ (first_ts, last_ts, api_calls, usage sums, model, lines) — tolerant.
+    """→ (first_ts, last_ts, api_calls, usage sums, model, lines, compactions).
 
-    Also appends ActionEvents: tool_use (with salient arg) and tool_result
-    error flags, linked by tool_use_id so retry storms are attributable.
+    Also appends ActionEvents (tool_use with salient arg; tool_result error
+    flags linked by tool_use_id) and counts context compactions — lines whose
+    type/subtype mentions a compact boundary (anthropics/claude-code writes
+    `subtype: "compact_boundary"`). Each compaction re-sends a near-full
+    context window, so the count is a direct cost signal.
     """
     first = last = None
     calls = 0
     inp = out = cr = cw = 0
     model = None
     lines = 0
+    compactions = 0
     id_to_name = {}
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for raw in f:
@@ -83,6 +87,9 @@ def _scan_file(path: str, sid: str, events: list):
             if ts:
                 first = ts if first is None else min(first, ts)
                 last = ts if last is None else max(last, ts)
+            marker = f"{obj.get('type', '')}/{obj.get('subtype', '')}".lower()
+            if "compact" in marker:
+                compactions += 1
             msg = obj.get("message")
             if not isinstance(msg, dict):
                 continue
@@ -121,7 +128,7 @@ def _scan_file(path: str, sid: str, events: list):
                                 ok=not bool(item.get("is_error")),
                             )
                         )
-    return first, last, calls, inp, out, cr, cw, model, lines
+    return first, last, calls, inp, out, cr, cw, model, lines, compactions
 
 
 def load(
@@ -154,7 +161,9 @@ def load(
         try:
             if days and os.path.getmtime(path) < since:
                 return
-            first, last, calls, inp, out, cr, cw, model, lines = _scan_file(path, sid, local_events)
+            first, last, calls, inp, out, cr, cw, model, lines, compactions = _scan_file(
+                path, sid, local_events
+            )
         except OSError:
             return
         if lines == 0:
@@ -162,6 +171,8 @@ def load(
         if days and last is not None and last < since:
             return
         snap.events.extend(local_events)
+        if compactions:
+            snap.compactions[sid] = compactions
         snap.sessions.append(
             SessionRec(
                 id=sid,

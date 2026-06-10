@@ -46,10 +46,22 @@ class FunctionStat:
 
 
 @dataclass
+class CronJobStat:
+    job: str
+    runs: int
+    cost: float
+    cost_known: bool
+    avg_tokens: int
+    max_tokens: int
+
+
+@dataclass
 class BehaviorReport:
     agent: str
     source_filter: str = ""
     functions: list = field(default_factory=list)
+    compactions: tuple = (0, [])  # total, [(session_title, count)] worst
+    cron_runs: list = field(default_factory=list)  # CronJobStat, costliest first
     rereads: list = field(default_factory=list)
     storms: list = field(default_factory=list)
     idle_heartbeats: tuple = (0, 0, None)  # count, total hb sessions, cost
@@ -83,6 +95,44 @@ def analyze_behavior(snap: Snapshot, top: int = 6, source_filter: str = "") -> B
     rep.functions = sorted(
         fstat.values(), key=lambda s: (s.result_tokens, s.calls), reverse=True
     )[: top + 4]
+
+    # --- context thrash: compactions recorded by the agent (each ≈ full-context re-send)
+    if snap.compactions:
+        worst = sorted(snap.compactions.items(), key=lambda kv: -kv[1])[:3]
+        rep.compactions = (
+            sum(snap.compactions.values()),
+            [(title.get(sid, sid), n) for sid, n in worst],
+        )
+
+    # --- per-cron-run economics (the "which job burns what" view; openclaw FR #24636)
+    import re as _re
+
+    jobs = {}
+    for s in snap.sessions:
+        if s.source not in ("cron", "heartbeat"):
+            continue
+        m = _re.search(r"cron:([^:]+?)(?::run:|$)", (s.title or s.id))
+        job = (m.group(1) if m else s.source)[:34]
+        j = jobs.setdefault(job, {"runs": 0, "cost": 0.0, "known": False, "toks": []})
+        j["runs"] += 1
+        if s.cost_usd is not None:
+            j["cost"] += s.cost_usd
+            j["known"] = True
+        j["toks"].append(s.total_tokens)
+    rep.cron_runs = sorted(
+        (
+            CronJobStat(
+                job=job,
+                runs=j["runs"],
+                cost=j["cost"],
+                cost_known=j["known"],
+                avg_tokens=int(sum(j["toks"]) / len(j["toks"])) if j["toks"] else 0,
+                max_tokens=max(j["toks"]) if j["toks"] else 0,
+            )
+            for job, j in jobs.items()
+        ),
+        key=lambda c: -c.cost,
+    )[:8]
 
     # --- re-read loops: same tool + same salient argument, 3+ times in one session
     arg_counts = Counter()
@@ -146,6 +196,19 @@ def analyze_behavior(snap: Snapshot, top: int = 6, source_filter: str = "") -> B
     rep.reasoning_heavy = sorted(rep.reasoning_heavy, key=lambda x: -x[1])[:top]
 
     # --- observations: up to 3, each names the burn and the change
+    if rep.compactions[0] >= 3:
+        total, worst = rep.compactions
+        w = f" ('{worst[0][0]}' alone: {worst[0][1]})" if worst else ""
+        rep.observations.append(
+            f"{total} context compactions in the window{w} — each one re-sends a near-full "
+            "context window. Split long sessions or trim what gets loaded into context."
+        )
+    if rep.cron_runs and rep.cron_runs[0].cost_known and rep.cron_runs[0].cost > 1.0:
+        c = rep.cron_runs[0]
+        rep.observations.append(
+            f"scheduled job `{c.job}`: {c.runs} runs cost {fmt_money(c.cost, 'estimated')} in the "
+            f"window (max {fmt_tokens(c.max_tokens)} tokens/run) — the per-run receipt nobody shows."
+        )
     if rep.rereads:
         r = rep.rereads[0]
         tok = f" ≈{fmt_tokens(r.approx_tokens)} tokens re-paid" if r.approx_tokens else ""
@@ -232,6 +295,9 @@ def behavior_json(rep: BehaviorReport) -> dict:
         "agentburn_why": 1,
         "agent": rep.agent,
         "functions": [asdict(f) for f in rep.functions],
+        "compactions": {"total": rep.compactions[0],
+                        "worst": [{"session": t, "count": n} for t, n in rep.compactions[1]]},
+        "cron_runs": [asdict(c) for c in rep.cron_runs],
         "rereads": [asdict(r) for r in rep.rereads],
         "storms": [asdict(s) for s in rep.storms],
         "idle_heartbeats": {"idle": rep.idle_heartbeats[0], "total": rep.idle_heartbeats[1],
@@ -252,6 +318,27 @@ def render_behavior(rep: BehaviorReport, color: bool = True) -> str:
     out = ["", b(f"🔬 agentburn why — {rep.agent}")]
     out.append(dim("   what the agent actually did, from its own records — observations, not verdicts"))
     out.append("")
+
+    if rep.cron_runs:
+        out.append(b("   CRON RUNS — the per-run receipt"))
+        out.append(dim("   what each scheduled job actually costs, run by run"))
+        for c in rep.cron_runs:
+            cost = fmt_money(c.cost, "estimated") if c.cost_known else fmt_tokens(c.avg_tokens * c.runs) + " tok"
+            flag = red(f"   max {fmt_tokens(c.max_tokens)}") if c.max_tokens > 3 * max(c.avg_tokens, 1) else ""
+            out.append(
+                f"   {c.job:<24} {c.runs:>3} runs   {cost:>10}   avg {fmt_tokens(c.avg_tokens):>6}/run{flag}"
+            )
+        out.append("")
+
+    total_c, worst_c = rep.compactions
+    if total_c > 0:
+        out.append(b("   CONTEXT THRASH — compactions"))
+        out.append(dim("   every compaction re-sends a near-full context window — a silent surcharge"))
+        line = f"   {total_c} compaction(s) in the window"
+        if worst_c:
+            line += " · worst: " + ", ".join(f"{t} ({n}×)" for t, n in worst_c)
+        out.append(red(line) if total_c >= 3 else line)
+        out.append("")
 
     if rep.functions:
         out.append(b("   WHAT IT ACTUALLY DID — functions called"))

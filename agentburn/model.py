@@ -84,3 +84,4 @@ class Snapshot:
     # behavioral layer (filled when the adapter can see actions/outcomes)
     events: list[ActionEvent] = field(default_factory=list)
     outcomes: dict = field(default_factory=dict)  # session_id → "failed" | "timeout" | …
+    compactions: dict = field(default_factory=dict)  # session_id → count of context compactions

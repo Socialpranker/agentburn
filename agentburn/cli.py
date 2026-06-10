@@ -40,6 +40,7 @@ RECIPES = """examples:
   agentburn                          every agent on this machine, last 30 days
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
+  agentburn drift                    your model spend × world usage trend — are you paying for a dying model?
   agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
   agentburn --save-baseline          snapshot → optimize config → agentburn --compare
   agentburn fix                      ready-to-paste config patches (dry-run, never writes)
@@ -57,10 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=RECIPES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("command", nargs="?", choices=["report", "doctor", "why", "explain", "mcp", "fix"],
+    ap.add_argument("command", nargs="?",
+                    choices=["report", "doctor", "why", "explain", "mcp", "fix", "drift"],
                     default="report",
-                    help="report (default) · why (behavioral forensics) · explain (LLM interpretation) · "
-                         "fix (config patches, dry-run) · doctor (accounting health) · mcp (stdio server)")
+                    help="report (default) · why (behavioral forensics) · drift (your spend × world trend) · "
+                         "fix (config patches, dry-run) · explain (LLM) · doctor (accounting health) · mcp")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -76,6 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--save-baseline", action="store_true", help="save current pace as the optimization baseline")
     ap.add_argument("--compare", action="store_true", help="compare current pace against the saved baseline")
     ap.add_argument("--baseline-file", default=None, help="override baseline location (default ~/.agentburn/baseline.json)")
+    ap.add_argument("--trends", default=None, metavar="URL|FILE",
+                    help="drift: override the world-trends source (default: token-history public JSON)")
     ap.add_argument("--llm", default=None, metavar="URL",
                     help="explain: OpenAI-compatible endpoint (default: local ollama at localhost:11434)")
     ap.add_argument("--model", default=None, help="explain: model name (or env AGENTBURN_LLM_MODEL)")
@@ -185,6 +189,24 @@ def main(argv=None) -> int:
             from .doctor import render_doctor
 
             print(render_doctor(load(found[0]), color=color))
+            return 0
+
+        if args.command == "drift":
+            from .drift import TRENDS_URL, build_drift, load_trends, render_drift
+
+            analyses = [analyze(load(n), night_window=args.night) for n in found]
+            try:
+                trends = load_trends(args.trends or TRENDS_URL)
+            except RuntimeError as e:
+                print(f"agentburn drift: {e}", file=sys.stderr)
+                return 2
+            d = build_drift(analyses, trends)
+            if args.json:
+                import json as _json
+
+                print(_json.dumps(d, indent=2, ensure_ascii=False))
+            else:
+                print(render_drift(d, color=color))
             return 0
 
         if args.command == "fix":

@@ -78,26 +78,26 @@ def build_db(path: str):
     )
     rows = [
         # nightly cron on an expensive model — the villain (3:30, multiple days back)
-        ("cron1", "cron", "anthropic/claude-opus-x", None, night_ts(2, 3), "nightly digest",
+        ("cron1", "cron", "anthropic/claude-opus-4.6", None, night_ts(2, 3), "nightly digest",
          12, 40, 600_000, 20_000, 0, 0, 0, 18.0, None),
-        ("cron2", "cron", "anthropic/claude-opus-x", None, night_ts(1, 3), "nightly digest",
+        ("cron2", "cron", "anthropic/claude-opus-4.6", None, night_ts(1, 3), "nightly digest",
          12, 40, 600_000, 20_000, 0, 0, 0, 18.0, None),
         # daytime CLI session, actual cost, light overhead
-        ("cli1", "cli", "deepseek/deepseek-v3", None, night_ts(1, 14), "refactor",
+        ("cli1", "cli", "deepseek/deepseek-v3.2-20251201", None, night_ts(1, 14), "refactor",
          30, 20, 100_000, 30_000, 50_000, 5_000, 0, None, 4.0),
         # telegram gateway: heavy per-call input (bootstrap resend pattern)
-        ("tg1", "telegram", "deepseek/deepseek-v3", None, night_ts(1, 12), "tg chat",
+        ("tg1", "telegram", "deepseek/deepseek-v3.2-20251201", None, night_ts(1, 12), "tg chat",
          40, 10, 200_000, 10_000, 0, 0, 0, 3.0, None),
         # subagents spawned by cli1 (one nested two levels deep)
-        ("sub1", "subagent", "deepseek/deepseek-v3", "cli1", night_ts(1, 14.2), "research",
+        ("sub1", "subagent", "deepseek/deepseek-v3.2-20251201", "cli1", night_ts(1, 14.2), "research",
          8, 6, 60_000, 8_000, 0, 0, 0, 1.5, None),
-        ("sub2", "subagent", "deepseek/deepseek-v3", "sub1", night_ts(1, 14.3), "sub-research",
+        ("sub2", "subagent", "deepseek/deepseek-v3.2-20251201", "sub1", night_ts(1, 14.3), "sub-research",
          5, 4, 40_000, 5_000, 0, 0, 0, 1.0, None),
         # broken accounting: messages exist, zero tokens (hermes #12023)
         ("brk1", "discord", "minimax/m2", None, night_ts(3, 10), "broken",
          9, 3, 0, 0, 0, 0, 0, None, None),
         # ancient session outside the 30d window — must be filtered out
-        ("old1", "cli", "deepseek/deepseek-v3", None, time.time() - 90 * 86400, "old",
+        ("old1", "cli", "deepseek/deepseek-v3.2-20251201", None, time.time() - 90 * 86400, "old",
          5, 5, 1_000_000, 100_000, 0, 0, 0, 99.0, None),
     ]
     con.executemany(S, rows)
@@ -118,7 +118,7 @@ def build_db(path: str):
 def build_dumps(d: str):
     os.makedirs(d, exist_ok=True)
     body = {
-        "model": "deepseek/deepseek-v3",
+        "model": "deepseek/deepseek-v3.2-20251201",
         "system": "S" * 5000,
         "tools": [{"name": f"tool{i}", "description": "D" * 280} for i in range(31)],
         "messages": [{"role": "user", "content": "U" * 2000}],
@@ -245,11 +245,11 @@ def main():
     os.makedirs(store_dir)
     now_ms = time.time() * 1000
     oc_store = {
-        "agent:main:main": {"sessionId": "m1", "model": "anthropic/claude-opus-x",
+        "agent:main:main": {"sessionId": "m1", "model": "anthropic/claude-opus-4.6",
                             "inputTokens": 100_000, "outputTokens": 20_000, "cacheRead": 5_000,
                             "cacheWrite": 1_000, "estimatedCostUsd": 4.0,
                             "sessionStartedAt": now_ms - 3600_000},
-        "cron:main-heartbeat-job": {"sessionId": "hb", "model": "anthropic/claude-opus-x",
+        "cron:main-heartbeat-job": {"sessionId": "hb", "model": "anthropic/claude-opus-4.6",
                                     "totalTokens": 900_000, "estimatedCostUsd": 18.0,
                                     "sessionStartedAt": now_ms - 2 * 3600_000},
         "agent:main:cron:digest:run:run-1": {"sessionId": "cr", "model": "deepseek/v3",
@@ -571,7 +571,7 @@ def main():
     jobs_dir = os.path.join(hermes_home, ".hermes", "cron")
     os.makedirs(jobs_dir, exist_ok=True)
     with open(os.path.join(jobs_dir, "jobs.json"), "w") as f:
-        json.dump({"jobs": [{"id": "j1", "name": "nightly digest", "model": "anthropic/claude-opus-x"},
+        json.dump({"jobs": [{"id": "j1", "name": "nightly digest", "model": "anthropic/claude-opus-4.6"},
                             {"id": "j2", "name": "weekly report", "model": None}]}, f)
     r_fix = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
                             "--db", os.path.join(hermes_home, ".hermes", "state.db"), "--no-color"],
@@ -623,6 +623,72 @@ def main():
     readme = open(os.path.join(root, "README.md")).read()
     ok("README carries mcp-name for PyPI validation",
        "mcp-name: io.github.Socialpranker/agentburn" in readme)
+
+    print("context thrash + cron runs (ход 2):")
+    cc_compact = [
+        {"type": "system", "subtype": "compact_boundary", "timestamp": iso(2)},
+        {"type": "system", "subtype": "compact_boundary", "timestamp": iso(2)},
+        {"type": "system", "subtype": "compact_boundary", "timestamp": iso(1)},
+    ]
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a") as f:
+        f.write("\n" + "\n".join(json.dumps(l) for l in cc_compact))
+    cc4 = claude_code.load(db_path=cc_root, days=30)
+    ok("cc: compactions counted per session",
+       cc4.compactions.get("11111111-2222-3333-4444-555555555555") == 3)
+    cb4 = analyze_behavior(cc4)
+    ok("cc: CONTEXT THRASH in report + observation",
+       cb4.compactions[0] == 3 and any("compaction" in o for o in cb4.observations))
+    rend4 = render_behavior(cb4, color=False)
+    ok("cc: thrash section rendered", "CONTEXT THRASH" in rend4 and "3 compaction" in rend4)
+
+    oc4 = openclaw.load(db_path=oc_root, days=30)
+    ob4 = analyze_behavior(oc4)
+    digest_job = next((c for c in ob4.cron_runs if c.job == "digest"), None)
+    ok("oc: cron run rollup by job (digest from key cron:digest:run:run-1)",
+       digest_job is not None and digest_job.runs == 1 and abs(digest_job.cost - 1.0) < 1e-6)
+    ok("oc: heartbeat jobs rolled up too",
+       any("heartbeat" in c.job for c in ob4.cron_runs))
+    ok("oc: CRON RUNS section rendered",
+       "CRON RUNS" in render_behavior(ob4, color=False))
+
+    print("drift (ход 1):")
+    from agentburn.drift import build_drift, load_trends, render_drift
+
+    trends_path = os.path.join(tempfile.mkdtemp(), "trends.json")
+    with open(trends_path, "w") as f:
+        json.dump({
+            "as_of": "2026-06-10", "days_covered": 40, "warming_up": False,
+            "note": "test", "models": {
+                "anthropic/claude-opus-4.6": {"t7": 9e12, "pct_4w": -41.0, "last": 1e12},
+                "deepseek/deepseek-v3.2": {"t7": 8e12, "pct_4w": 12.0, "last": 1e12},
+                "stepfun/step-3.5-flash": {"t7": 5e12, "pct_4w": 180.0, "last": 9e11},
+            },
+            "risers": [{"slug": "stepfun/step-3.5-flash", "pct_4w": 180.0, "t7": 5e12}],
+            "fallers": [{"slug": "anthropic/claude-opus-4.6", "pct_4w": -41.0, "t7": 9e12}],
+        }, f)
+    tr = load_trends(trends_path)
+    d = build_drift([analyze(hermes.load(db_path=env_db, days=30))], tr)
+    opus_row = next(r for r in d["rows"] if "opus" in r["model"])
+    ds_row = next(r for r in d["rows"] if "deepseek" in r["model"])
+    ok("drift: direct join + dated-slug normalization (deepseek-…-20251201 → v3.2)",
+       opus_row["world_pct_4w"] == -41.0 and ds_row["world_pct_4w"] == 12.0)
+    ok("drift: alert for a dying model you pay for",
+       any("world usage -41%" in a or "-41%" in a for a in d["advice"]))
+    ok("drift: rising cheaper alternative cited with price math",
+       any("stepfun/step-3.5-flash" in a and "cheaper" in a for a in d["advice"]))
+    rendered_d = render_drift(d, color=False)
+    ok("drift render: table + alerts + privacy line",
+       all(k in rendered_d for k in ("YOUR MODELS vs THE WORLD", "DRIFT ALERTS",
+                                     "never leaves this machine")))
+    warm = build_drift([analyze(hermes.load(db_path=env_db, days=30))],
+                       {"warming_up": True, "days_covered": 3, "models": {}})
+    ok("drift: warming_up path renders gently",
+       "warming up" in render_drift(warm, color=False))
+    r_drift = subprocess.run([sys.executable, "-m", "agentburn.cli", "drift", "--agent", "hermes",
+                              "--db", env_db, "--trends", trends_path, "--json"],
+                             capture_output=True, text=True)
+    dj = json.loads(r_drift.stdout)
+    ok("cli drift --json works end-to-end", dj["rows"] and dj["advice"])
 
     print(f"\nAll {PASSED} checks passed.")
 
