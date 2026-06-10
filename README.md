@@ -75,6 +75,24 @@ agentburn --json           # machine-readable, pipe it anywhere
 agentburn --no-color
 ```
 
+## Mechanics
+
+**📤 Share your burn (`--share`).** An anonymized card — categories, models and totals only; session titles, paths and content are excluded *by construction*. Safe to paste into a post; `--svg card.svg` renders the same card as an image:
+
+```text
+🔥 my hermes agent · last 30d
+~$45.50 · 1.75M tokens → ~$430/mo pace
+cron 79% · cli 9% · telegram 7% · subagent 5%
+🌙 while I slept (00–08): ~$36.00 (79%)
+heaviest overhead: telegram 20,000 tokens/call (community baseline ≈8k/call: +150%)
+```
+
+**📏 Calibration against public benchmarks.** "Is 15k input tokens per call normal?" The report compares your fixed overhead with community-measured references embedded as dated constants (e.g. the [Phala always-on-agent benchmark](https://phala.com/posts/understanding-openclaws-token-usage), 2026-03: ≈8k/call baseline). No network — sources are cited inline.
+
+**📐 Optimize → prove it (`--save-baseline` / `--compare`).** Snapshot your pace, change the config (cheaper cron model, trimmed toolsets), then `agentburn --compare` shows the delta in $/month — pace-normalized, so a 7-day baseline compares honestly with a 30-day window. Every recommendation becomes a testable promise.
+
+**🩺 `agentburn doctor`.** Trackers disagree because the agent's own accounting has gaps. doctor names the broken combinations (provider × model × source) for zero-usage and unpriced sessions, and generates a ready-to-paste upstream bug report — counters only, no message content.
+
 ## Supported agents
 
 | Agent | Status | Data source |

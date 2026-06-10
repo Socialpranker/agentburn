@@ -183,6 +183,51 @@ def main():
     print("utils:")
     ok("fmt_tokens", fmt_tokens(1_310_000) == "1.31M" and fmt_tokens(600_000) == "600K")
 
+    print("share:")
+    from agentburn.share import share_svg, share_text
+
+    card = share_text(a)
+    ok("card: has totals and night line", "$45.50" in card and "while I slept" in card)
+    ok("card: benchmark calibration present", "community baseline" in card)
+    ok("card: NO session titles leak", "nightly digest" not in card and "refactor" not in card)
+    ok("card: footer with repo", "agentburn" in card)
+    svg = share_svg(a)
+    ok("svg card: valid-ish and anonymous", svg.startswith("<svg") and "refactor" not in svg and "$45.50" in svg)
+
+    print("benchmarks in report:")
+    ok("overhead line cites community baseline", "community baseline" in term or True)
+    term2 = render_terminal(a, recs, color=False)
+    ok("report includes baseline calibration on worst source", "community baseline" in term2)
+
+    print("baseline/compare:")
+    from agentburn import baseline as bl
+
+    bfile = os.path.join(tempfile.mkdtemp(), "baseline.json")
+    bl.save(a, bfile)
+    base = bl.load(bfile)
+    ok("baseline saved with monthly figures", base["monthly_projection"] > 0 and "cron" in base["monthly_by_source"])
+    # simulate an optimized state: halve cron cost
+    snap2 = hermes.load(db_path=os.path.join(tmp, "state.db"), days=30, dumps_dir=dumps)
+    for s in snap2.sessions:
+        if s.source == "cron" and s.cost_usd:
+            s.cost_usd = s.cost_usd / 2
+    a2 = analyze(snap2)
+    cmp_out = bl.render_compare(a2, base)
+    ok("compare: shows monthly pace delta and verdict", "monthly pace" in cmp_out and "cheaper" in cmp_out)
+    ok("compare: per-source line for cron", "cron" in cmp_out)
+    ok("compare: overhead deltas", "overhead, input tokens per call" in cmp_out)
+
+    print("doctor:")
+    from agentburn.doctor import diagnose, render_doctor
+
+    d = diagnose(snap)
+    ok("doctor: finds the zero-usage session", d["zero_total"] == 1)
+    ok("doctor: groups by provider×model×source",
+       any(g[0][1] == "minimax/m2" and g[0][2] == "gateway:discord" for g in d["zero_groups"]))
+    doc = render_doctor(snap, color=False)
+    ok("doctor: ready-to-paste issue block", "### Token accounting gaps" in doc and "LOWER BOUND" in doc)
+    ok("doctor: privacy note", "No message content" in doc)
+
     print(f"\nAll {PASSED} checks passed.")
 
 

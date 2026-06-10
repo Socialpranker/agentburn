@@ -29,6 +29,7 @@ class SessionRec:
     cost_usd: Optional[float]  # actual > estimated > None
     cost_basis: str  # "actual" | "estimated" | "unknown"
     message_count: int = 0
+    provider: Optional[str] = None  # billing provider, for doctor diagnostics
 
     @property
     def total_tokens(self) -> int:

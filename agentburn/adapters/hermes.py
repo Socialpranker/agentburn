@@ -122,6 +122,7 @@ def load(
                 _col(scols, "reasoning_tokens", "0"),
                 _col(scols, "estimated_cost_usd"),
                 _col(scols, "actual_cost_usd"),
+                _col(scols, "billing_provider"),
             ]
         )
         where = "WHERE COALESCE(started_at, 0) >= ?" if days else ""
@@ -157,6 +158,7 @@ def load(
                     cost_usd=float(cost) if cost is not None else None,
                     cost_basis=basis,
                     message_count=int(r["message_count"] or 0),
+                    provider=r["billing_provider"],
                 )
             )
 

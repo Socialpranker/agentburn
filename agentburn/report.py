@@ -127,10 +127,14 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
         out.append("")
 
     if a.overhead_per_call:
+        from .benchmarks import overhead_vs_reference
+
         out.append(p.b("   FIXED OVERHEAD (avg input tokens per API call)"))
-        for src, v in sorted(a.overhead_per_call.items(), key=lambda kv: kv[1], reverse=True)[:5]:
+        ranked = sorted(a.overhead_per_call.items(), key=lambda kv: kv[1], reverse=True)
+        for i, (src, v) in enumerate(ranked[:5]):
             flag = p.red(" ← heavy") if v >= 12000 else ""
-            out.append(f"   {src:<20} {v:>8,}{flag}")
+            ref = p.dim(f"   {overhead_vs_reference(v)}") if i == 0 and v > 0 else ""
+            out.append(f"   {src:<20} {v:>8,}{flag}{ref}")
         if a.composition:
             c = a.composition
             out.append(
