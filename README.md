@@ -1,57 +1,42 @@
-# agentburn
+<div align="center">
 
-<p>
-  <a href="https://pypi.org/project/agentburn/"><img alt="PyPI" src="https://img.shields.io/pypi/v/agentburn?color=f7775a"></a>
-  <img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-5ab0f7">
-  <img alt="zero deps" src="https://img.shields.io/badge/dependencies-0-7df0a8">
-  <img alt="offline checks" src="https://img.shields.io/badge/offline_checks-104-c89bf7">
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-8a949e"></a>
-</p>
+<img src="assets/wordmark.svg" alt="agentburn — where does your AI agent burn money, while you sleep?" width="420">
 
-> **Where does your AI agent burn money — while you sleep?**
+<br>
 
-Always-on agents bill you around the clock. Hermes Agent users wake up to
-[**$47 overnight bills**](https://dev.to/chintanonweb/hermes-agent-gets-smarter-every-day-so-does-the-bill-4i8o)
-from recursive subagent runs; one user measured that
-[**73% of every API call is fixed overhead**](https://github.com/NousResearch/hermes-agent/issues/4379)
-(tool definitions + system prompt, resent every time); chained delegation means
-*"step 3 costs 4× step 1 — no alert, just a bill."* Built-in `/usage` shows totals.
-Nothing shows **where** it burns.
+<a href="https://pypi.org/project/agentburn/"><img alt="PyPI" src="https://img.shields.io/pypi/v/agentburn?color=f7775a"></a>
+<img alt="Python" src="https://img.shields.io/badge/python-3.9%2B-5ab0f7">
+<img alt="zero deps" src="https://img.shields.io/badge/dependencies-0-7df0a8">
+<img alt="offline checks" src="https://img.shields.io/badge/offline_checks-104-c89bf7">
+<a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-8a949e"></a>
 
-agentburn is a local profiler for your agent's own accounting data — **universal across agents**: Hermes Agent, OpenClaw and Claude Code today, one normalized model underneath. One command, zero dependencies, nothing leaves your machine:
+<br><br>
 
-```bash
-uvx agentburn          # or: pipx run agentburn / pip install agentburn
+<img src="assets/demo.svg" alt="uvx agentburn — animated demo: TL;DR verdict, burn bars by source, the overnight bill, and what to change" width="760">
+
+<br>
+
+**[Hermes Agent](#supported-agents) · [OpenClaw](#supported-agents) · [Claude Code](#supported-agents)** — one normalized core, local, read-only, zero dependencies
+
+```
+uvx agentburn
 ```
 
-```text
-🔥 agentburn — hermes · last 30d
+</div>
 
-   TL;DR: ≈ ~$431/mo pace; 79% of it is `cron`.
-   First fix: 79% of spend happens at night — route night work to a cheaper model
+---
 
-   ~$45.50 total · 1.75M tokens · 7 sessions · 123 API calls
-   ≈ ~$431.24/month at the current pace
+## Why this exists
 
-   WHERE IT BURNS (by source)
-   cron                 ██████████████····  79%     ~$36.00    1.24M  2 sess
-   cli                  ██················   9%      ~$4.00     185K  1 sess
-   gateway:telegram     █·················   7%      ~$3.00     210K  1 sess
-   subagent             █·················   5%      ~$2.50     113K  2 sess
+Always-on agents bill you around the clock — and their built-in counters only show totals. Real threads that made this tool:
 
-   🌙 WHILE YOU SLEPT (00:00–08:00): ~$36.00 (79% of spend) · 2 sessions
-      mostly: cron
+> *"73% of every API call is fixed overhead — ~13.9K tokens of tool definitions and system prompt, resent every time."* — [hermes-agent #4379](https://github.com/NousResearch/hermes-agent/issues/4379)
 
-   FIXED OVERHEAD (avg input tokens per API call)
-   gateway:telegram       20,000 ← heavy
-   cron                   15,000 ← heavy
-      input composition (sampled from 3 request dumps): system 30% · tools 58% · history 12%
+> *"One entrant wrote about waking up to a **$47 surprise bill** from an overnight run — that's not an exotic failure, it's the default behavior of an unsupervised loop."* — [dev.to](https://dev.to/chintanonweb/hermes-agent-gets-smarter-every-day-so-does-the-bill-4i8o)
 
-   💡 DO THIS
-   1. 79% of spend happens at night — that's ≈$341/mo while you sleep. Route night work to a cheaper model.
-   2. Scheduled (cron) sessions run on anthropic/claude-opus-x — maintenance rarely needs a frontier model.
-   3. 20,000 input tokens per call on telegram: trim per-platform toolsets, prune unused skills.
-```
+> *"I've seen runs where step 3 costs 4× step 1 — **no alert, just a bill**."* — [comment, ibid.](https://dev.to/chintanonweb/hermes-agent-gets-smarter-every-day-so-does-the-bill-4i8o)
+
+agentburn reads the agent's **own accounting data** (read-only) and answers the question the totals never do: **where**.
 
 ## What it answers
 
@@ -61,6 +46,20 @@ uvx agentburn          # or: pipx run agentburn / pip install agentburn
 - **Subagent rollups** — delegation cost chained back to the session that spawned it. Recursion compounds; here is the receipt.
 - **Top tools** — which tool results weigh most in your context.
 - **What to do** — up to 4 conservative, named recommendations with monthly estimates.
+
+## How it compares
+
+|  | **agentburn** | ccusage | codeburn | built-in `/usage` |
+|---|---|---|---|---|
+| Burn by *source* (cron · heartbeat · gateways · subagents) | ✅ | — | — | % only, 7 days, this machine |
+| 🌙 the overnight bill, isolated | ✅ | — | — | — |
+| Behavioral forensics (`why`: loops, retry storms, failed-run cost) | ✅ | — | — | — |
+| Ready config patches (`fix`, source-verified keys) | ✅ | — | — | — |
+| Accounting-gap detection (`doctor`, lower-bound honesty) | ✅ | — | — | — |
+| MCP server (agent answers for its own bill) | ✅ | — | — | — |
+| Totals / live blocks / many CLIs | basic | ✅ best-in-class | ✅ TUI, 25 providers | totals |
+
+*As of June 2026; ccusage and codeburn are excellent at what they do — agentburn deliberately starts where they stop ([ccusage scoped per-tool analysis out](https://github.com/ryoppippi/ccusage/issues/688)).*
 
 ## Why trust these numbers
 
@@ -189,6 +188,8 @@ One normalized model, one adapter per agent. Run `agentburn` and every agent fou
 
 Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural next targets — PRs welcome.
 
+<div align="center"><img src="assets/architecture.svg" alt="architecture: agent data → adapters → normalized model → report/why/fix/explain/doctor/mcp" width="780"></div>
+
 ## Related
 
 [token-history](https://github.com/Socialpranker/token-history) — the macro view: daily archive of *which agents the world uses* (OpenRouter rankings). agentburn is the micro view: *where yours burns*.
@@ -196,3 +197,13 @@ Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural ne
 ## License
 
 MIT
+
+---
+
+<div align="center">
+
+**the token-\* family** · [token-history](https://github.com/Socialpranker/token-history) — which agents the world runs · **agentburn** — where yours burns
+
+*if this saved you a dinner's worth of tokens, a ⭐ helps the next person find it*
+
+</div>

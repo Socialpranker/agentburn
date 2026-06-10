@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="200" viewBox="0 0 780 200" role="img" aria-label="agentburn architecture: agent data through adapters and a normalized model into commands">
+<style>
+  text { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  .h { fill: #e6e9ec; font-size: 13px; font-weight: 600; }
+  .s { fill: #8a949e; font-size: 11px; }
+  .box { fill: #14181d; stroke: #242a31; stroke-width: 1; }
+</style>
+<rect width="780" height="200" rx="12" fill="#0b0d10"/>
+
+<rect x="20" y="22" width="170" height="40" rx="8" class="box"/>
+<text x="105" y="40" text-anchor="middle" class="h">~/.hermes/state.db</text>
+<text x="105" y="54" text-anchor="middle" class="s">Hermes Agent · SQLite</text>
+
+<rect x="20" y="80" width="170" height="40" rx="8" class="box"/>
+<text x="105" y="98" text-anchor="middle" class="h">~/.openclaw/…/sessions</text>
+<text x="105" y="112" text-anchor="middle" class="s">OpenClaw · JSON + JSONL</text>
+
+<rect x="20" y="138" width="170" height="40" rx="8" class="box"/>
+<text x="105" y="156" text-anchor="middle" class="h">~/.claude/projects</text>
+<text x="105" y="170" text-anchor="middle" class="s">Claude Code · JSONL</text>
+
+<path d="M196 42 C230 42 230 92 262 96" stroke="#5c6670" fill="none" stroke-width="1.5"/>
+<path d="M196 100 H262" stroke="#5c6670" fill="none" stroke-width="1.5"/>
+<path d="M196 158 C230 158 230 108 262 104" stroke="#5c6670" fill="none" stroke-width="1.5"/>
+
+<rect x="266" y="72" width="140" height="56" rx="8" class="box"/>
+<text x="336" y="96" text-anchor="middle" class="h">adapters</text>
+<text x="336" y="112" text-anchor="middle" class="s">read-only · ~150 lines each</text>
+
+<path d="M412 100 H448" stroke="#5c6670" fill="none" stroke-width="1.5"/>
+
+<rect x="452" y="72" width="150" height="56" rx="8" class="box"/>
+<text x="527" y="92" text-anchor="middle" class="h">normalized model</text>
+<text x="527" y="107" text-anchor="middle" class="s">sessions · sources · events</text>
+<text x="527" y="120" text-anchor="middle" class="s">outcomes · costs</text>
+
+<path d="M608 100 H640" stroke="#5c6670" fill="none" stroke-width="1.5"/>
+
+<rect x="644" y="14" width="116" height="26" rx="7" class="box"/>
+<text x="702" y="31" text-anchor="middle" class="h">report</text>
+<rect x="644" y="46" width="116" height="26" rx="7" class="box"/>
+<text x="702" y="63" text-anchor="middle" class="h">why · fix</text>
+<rect x="644" y="78" width="116" height="26" rx="7" class="box"/>
+<text x="702" y="95" text-anchor="middle" class="h">explain · doctor</text>
+<rect x="644" y="110" width="116" height="26" rx="7" class="box"/>
+<text x="702" y="127" text-anchor="middle" class="h">mcp · sentinel</text>
+<rect x="644" y="142" width="116" height="26" rx="7" class="box"/>
+<text x="702" y="159" text-anchor="middle" class="h">share · baseline</text>
+<path d="M640 100 C636 60 636 30 644 27 M640 100 C638 80 638 62 644 59 M640 100 C638 120 638 138 644 141 M640 100 C636 140 636 168 644 155" stroke="#5c6670" fill="none" stroke-width="1"/>
+</svg>

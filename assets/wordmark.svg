@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="96" viewBox="0 0 420 96" role="img" aria-label="agentburn">
+<style>
+  .w { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-weight: 700; font-size: 52px; }
+</style>
+<g>
+  <path d="M38 14 C44 26 54 30 54 44 C54 56 46 66 34 66 C22 66 14 56 14 44 C14 36 18 31 21 27 C21 35 24 39 28 40 C26 30 30 20 38 14 Z" fill="#f7775a"/>
+  <path d="M34 38 C38 44 42 46 42 52 C42 58 38 61 34 61 C30 61 26 58 26 52 C26 47 30 42 34 38 Z" fill="#0b0d10" opacity="0.55"/>
+</g>
+<text x="72" y="62" class="w" fill="#e6e9ec">agent<tspan fill="#f7775a">burn</tspan></text>
+<text x="74" y="86" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="15" fill="#8a949e">where does your AI agent burn money — while you sleep?</text>
+</svg>

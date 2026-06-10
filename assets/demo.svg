@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="508" viewBox="0 0 760 508" role="img" aria-label="agentburn demo: uvx agentburn shows where the agent burns money">
+<style>
+  text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; }
+  .t { fill: #e6e9ec; } .d { fill: #8a949e; } .dd { fill: #5c6670; }
+  .amber { fill: #f5d76e; } .red { fill: #f7a08a; } .green { fill: #7df0a8; } .hot { fill: #f7775a; }
+  .fade { opacity: 0; animation: fadein .45s ease-out forwards; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  .type { clip-path: inset(0 100% 0 0); animation: type 1.1s steps(16, end) forwards; animation-delay: .4s; }
+  @keyframes type { to { clip-path: inset(0 -2% 0 0); } }
+  .caret { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .bar { transform: scaleX(0); transform-box: fill-box; transform-origin: left center;
+         animation: grow .7s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes grow { to { transform: scaleX(1); } }
+  .strip { opacity: 0; animation: stripin .5s ease-out forwards; animation-delay: 3.9s; }
+  @keyframes stripin { to { opacity: 1; } }
+  .delay-16 { animation-delay: 1.6s; } .delay-20 { animation-delay: 2.0s; } .delay-23 { animation-delay: 2.3s; }
+  .delay-26 { animation-delay: 2.6s; } .delay-28 { animation-delay: 2.8s; } .delay-30 { animation-delay: 3.0s; }
+  .delay-32 { animation-delay: 3.2s; } .delay-34 { animation-delay: 3.4s; } .delay-39 { animation-delay: 3.9s; }
+  .delay-45 { animation-delay: 4.5s; } .delay-48 { animation-delay: 4.8s; } .delay-53 { animation-delay: 5.3s; }
+</style>
+<rect width="760" height="508" rx="12" fill="#0b0d10"/>
+<rect width="760" height="34" rx="12" fill="#14181d"/>
+<rect y="22" width="760" height="12" fill="#14181d"/>
+<circle cx="22" cy="17" r="5.5" fill="#ff5f57"/><circle cx="42" cy="17" r="5.5" fill="#febc2e"/><circle cx="62" cy="17" r="5.5" fill="#28c840"/>
+<text x="380" y="21" text-anchor="middle" class="dd" font-size="12">~ agentburn</text>
+
+<text x="24" y="64" class="green">$</text>
+<g class="type"><text x="40" y="64" class="t">uvx agentburn</text></g>
+<text x="158" y="64" class="t caret">▍</text>
+
+<g class="fade delay-16">
+  <text x="24" y="100" class="t" font-weight="bold">🔥 agentburn — hermes · last 30d</text>
+</g>
+<g class="fade delay-20">
+  <text x="24" y="126" class="amber" font-weight="bold">TL;DR: ≈ ~$431/mo pace; 79% of it is `cron`.</text>
+  <text x="24" y="148" class="d">First fix: route night work to a cheaper model</text>
+</g>
+
+<g class="fade delay-23"><text x="24" y="186" class="t" font-weight="bold">WHERE IT BURNS</text></g>
+
+<g class="fade delay-26">
+  <text x="24" y="212" class="t">cron</text>
+  <rect x="120" y="202" width="380" height="11" rx="5.5" fill="#1b2026"/>
+  <rect x="120" y="202" width="300" height="11" rx="5.5" fill="#f7775a" class="bar delay-26"/>
+  <text x="516" y="212" class="d">79% · ~$36.00</text>
+</g>
+<g class="fade delay-28">
+  <text x="24" y="238" class="t">cli</text>
+  <rect x="120" y="228" width="380" height="11" rx="5.5" fill="#1b2026"/>
+  <rect x="120" y="228" width="34" height="11" rx="5.5" fill="#5ab0f7" class="bar delay-28"/>
+  <text x="516" y="238" class="d">9% · ~$4.00</text>
+</g>
+<g class="fade delay-30">
+  <text x="24" y="264" class="t">telegram</text>
+  <rect x="120" y="254" width="380" height="11" rx="5.5" fill="#1b2026"/>
+  <rect x="120" y="254" width="27" height="11" rx="5.5" fill="#f5d76e" class="bar delay-30"/>
+  <text x="516" y="264" class="d">7% · ~$3.00</text>
+</g>
+<g class="fade delay-32">
+  <text x="24" y="290" class="t">subagent</text>
+  <rect x="120" y="280" width="380" height="11" rx="5.5" fill="#1b2026"/>
+  <rect x="120" y="280" width="19" height="11" rx="5.5" fill="#c89bf7" class="bar delay-32"/>
+  <text x="516" y="290" class="d">5% · ~$2.50</text>
+</g>
+
+<g class="strip">
+  <rect x="24" y="312" width="712" height="34" rx="9" fill="#f7775a" opacity="0.13"/>
+  <text x="40" y="334" class="red" font-weight="bold">🌙 WHILE YOU SLEPT (00:00–08:00): ~$36.00 — 79% of spend</text>
+</g>
+
+<g class="fade delay-45"><text x="24" y="382" class="t" font-weight="bold">💡 DO THIS</text></g>
+<g class="fade delay-48">
+  <text x="24" y="406" class="t">1. Point cron jobs at a cheap model</text>
+  <text x="370" y="406" class="green">→ frees ≈$300/mo</text>
+</g>
+<g class="fade delay-48">
+  <text x="24" y="428" class="t">2. heartbeat.activeHours 09:00–24:00</text>
+  <text x="370" y="428" class="green">→ night burn ≈ $0</text>
+</g>
+
+<g class="fade delay-53">
+  <text x="24" y="468" class="dd">Next:  agentburn why   ·   agentburn fix   ·   agentburn --share</text>
+  <text x="24" y="490" class="dd">local · read-only · nothing leaves this machine</text>
+</g>
+</svg>
