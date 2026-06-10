@@ -1,0 +1,27 @@
+{
+ "schema": 1,
+ "as_of": "2026-06-10",
+ "n": 0,
+ "metrics": {
+  "overhead_cli": {
+   "n": 0
+  },
+  "overhead_gateway_max": {
+   "n": 0
+  },
+  "night_share": {
+   "n": 0
+  },
+  "idle_heartbeat_share": {
+   "n": 0
+  },
+  "failure_share": {
+   "n": 0
+  },
+  "cache_read_share": {
+   "n": 0
+  }
+ },
+ "spend_bands": {},
+ "note": "Efficiency percentiles from anonymous agentburn --submit payloads; plausibility-bounded; volumes are never ranked."
+}
