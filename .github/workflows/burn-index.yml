@@ -1,0 +1,38 @@
+name: burn-index
+
+on:
+  schedule:
+    - cron: "10 9 * * 1" # Mondays 09:10 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect burn-index issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/${{ github.repository }}/issues?labels=burn-index&state=all&per_page=100" > issues.json
+
+      - name: Aggregate
+        run: |
+          mkdir -p data
+          python3 tools/aggregate_burn_index.py issues.json data/burn-index.json
+          cat data/burn-index.json
+
+      - name: Commit
+        run: |
+          git config user.name "agentburn-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/burn-index.json
+          if git diff --cached --quiet; then echo "no change"; else
+            git commit -m "data: weekly burn-index aggregate"
+            git push
+          fi

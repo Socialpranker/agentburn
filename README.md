@@ -158,6 +158,18 @@ Your side is computed locally from the agents' own logs; the world side is one r
 
 **🩺 `agentburn why` additions:** **CRON RUNS** — the per-run receipt for every scheduled job (what [openclaw #24636](https://github.com/openclaw/openclaw/issues/24636) keeps asking for), and **CONTEXT THRASH** — compactions counted per session, because every compaction silently re-sends a near-full context window.
 
+**📊 `agentburn rank` + `--submit` — the Burn Index.** Anonymous community percentiles of *efficiency* — the benchmark volume-leaderboards can't be: nothing here rewards burning more.
+
+```text
+📊 agentburn rank — you vs the Burn Index
+
+   input tokens per call · cli              you:    15,000   median:    6,200   worse than ~75% of 41
+   share of spend at night                  you:     79.0%   median:    12.0%   worse than ~90% of 41
+   cache-read share of input volume         you:     61.0%   median:    44.0%   better than ~75% of 41
+```
+
+Joining is consent-by-click: `agentburn --submit` prints the exact anonymized payload (ratios and a coarse spend band — never raw volumes, titles or paths), then a prefilled GitHub-issue link that **you** open and submit. A weekly Action aggregates submissions with plausibility bounds (junk and flexing get dropped, not ranked) into public quantiles.
+
 **🔧 `agentburn fix` — from findings to ready config patches (dry-run by design).** Not "consider a cheaper model" but the exact file and the exact lines:
 
 ```text

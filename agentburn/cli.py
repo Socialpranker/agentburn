@@ -41,6 +41,8 @@ RECIPES = """examples:
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn drift                    your model spend × world usage trend — are you paying for a dying model?
+  agentburn rank                     you vs the community Burn Index (efficiency percentiles)
+  agentburn --submit                 join the index: anonymized payload + a link YOU click
   agentburn --week --share           this week's anonymized burn card (add --svg card.svg)
   agentburn --save-baseline          snapshot → optimize config → agentburn --compare
   agentburn fix                      ready-to-paste config patches (dry-run, never writes)
@@ -59,10 +61,11 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("command", nargs="?",
-                    choices=["report", "doctor", "why", "explain", "mcp", "fix", "drift"],
+                    choices=["report", "doctor", "why", "explain", "mcp", "fix", "drift", "rank"],
                     default="report",
-                    help="report (default) · why (behavioral forensics) · drift (your spend × world trend) · "
-                         "fix (config patches, dry-run) · explain (LLM) · doctor (accounting health) · mcp")
+                    help="report (default) · why (forensics) · drift (spend × world trend) · "
+                         "rank (you vs the Burn Index) · fix (config patches) · explain (LLM) · "
+                         "doctor (accounting health) · mcp")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -78,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--save-baseline", action="store_true", help="save current pace as the optimization baseline")
     ap.add_argument("--compare", action="store_true", help="compare current pace against the saved baseline")
     ap.add_argument("--baseline-file", default=None, help="override baseline location (default ~/.agentburn/baseline.json)")
+    ap.add_argument("--submit", action="store_true",
+                    help="print an anonymized Burn Index payload + a prefilled GitHub issue link "
+                         "(nothing is sent automatically — you review and click)")
+    ap.add_argument("--benchmark-file", default=None, metavar="FILE",
+                    help="rank: use a local burn-index.json instead of the public one")
     ap.add_argument("--trends", default=None, metavar="URL|FILE",
                     help="drift: override the world-trends source (default: token-history public JSON)")
     ap.add_argument("--llm", default=None, metavar="URL",
@@ -189,6 +197,32 @@ def main(argv=None) -> int:
             from .doctor import render_doctor
 
             print(render_doctor(load(found[0]), color=color))
+            return 0
+
+        if args.command == "rank" or args.submit:
+            from .behavior import analyze_behavior
+            from .burnindex import (INDEX_URL, build_metrics, load_index, rank_against,
+                                    render_rank, submit_url)
+
+            snaps = [load(n) for n in found]
+            analyses = [analyze(s, night_window=args.night) for s in snaps]
+            breps = [analyze_behavior(s) for s in snaps]
+            metrics = build_metrics(analyses, breps)
+            if args.submit:
+                import json as _json
+
+                print("\nAnonymized Burn Index payload (review it — counters and bands only):\n")
+                print(_json.dumps(metrics, indent=1))
+                print("\nIf you're happy with it, open this link and click 'Submit new issue':\n")
+                print(submit_url(metrics))
+                print("\nNothing was sent. Submitting is your click, in your browser.")
+                return 0
+            try:
+                index = load_index(args.benchmark_file or INDEX_URL)
+            except RuntimeError as e:
+                print(f"agentburn rank: {e}", file=sys.stderr)
+                return 2
+            print(render_rank(rank_against(metrics, index), index, color=color))
             return 0
 
         if args.command == "drift":

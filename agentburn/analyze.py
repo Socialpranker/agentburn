@@ -16,6 +16,7 @@ class Bucket:
     tokens: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0
     cost: float = 0.0
     cost_known: bool = False
 
@@ -25,6 +26,7 @@ class Bucket:
         self.tokens += s.total_tokens
         self.input_tokens += s.input_tokens
         self.output_tokens += s.output_tokens
+        self.cache_read_tokens += s.cache_read_tokens
         if s.cost_usd is not None:
             self.cost += s.cost_usd
             self.cost_known = True

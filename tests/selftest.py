@@ -690,6 +690,64 @@ def main():
     dj = json.loads(r_drift.stdout)
     ok("cli drift --json works end-to-end", dj["rows"] and dj["advice"])
 
+    print("burn index (ход 3):")
+    from agentburn.burnindex import (build_metrics, rank_against, render_rank,
+                                     spend_band, submit_url)
+    sys.path.insert(0, os.path.join(root, "tools"))
+    from aggregate_burn_index import aggregate, extract_submissions
+
+    h5 = hermes.load(db_path=env_db, days=30)
+    a5 = analyze(h5)
+    b5 = analyze_behavior(h5)
+    m5 = build_metrics([a5], [b5])
+    ok("metrics: efficiency ratios + coarse band only",
+       m5["schema"] == 1 and "night_share" in m5 and "overhead_cli" in m5
+       and m5["spend_band"] in ("<$10", "$10-50", "$50-200", "$200-1000", "$1000+", "unknown"))
+    ok("metrics: NO raw volumes/titles/paths",
+       all(k not in m5 for k in ("tokens", "total", "sessions"))
+       and "nightly digest" not in json.dumps(m5))
+    ok("spend bands", spend_band(7) == "<$10" and spend_band(431) == "$200-1000"
+       and spend_band(None) == "unknown")
+    from urllib.parse import unquote as urllib_unquote
+    url = submit_url(m5)
+    ok("submit url: prefilled issue with label", "issues/new" in url and "burn-index" in url
+       and "night_share" in urllib_unquote(url))
+
+    issues = [
+        {"body": "```json\n" + json.dumps({**m5, "overhead_cli": 4000 + i * 1000}) + "\n```"}
+        for i in range(6)
+    ] + [
+        {"body": "```json\n" + json.dumps({**m5, "overhead_cli": 9_999_999}) + "\n```"},  # junk
+        {"body": "no payload here"},
+    ]
+    subs = extract_submissions(issues)
+    ok("aggregate: junk filtered by plausibility bounds",
+       len(subs) == 7 and sum(1 for s in subs if "overhead_cli" in s) == 6)
+    agg = aggregate(issues)
+    ok("aggregate: quantiles for n>=5, insufficient otherwise",
+       agg["metrics"]["overhead_cli"]["n"] == 6 and agg["metrics"]["overhead_cli"]["p50"]
+       and agg["metrics"]["idle_heartbeat_share"].get("p50") is None)
+    rows = rank_against({**m5, "overhead_cli": 999_999_0}, agg)  # very bad overhead
+    oc_row = next(r for r in rows if r["metric"] == "overhead_cli")
+    ok("rank: bad value lands worse-than-90", oc_row["worse_than_pct"] == 90)
+    rendered_r = render_rank(rows, agg, color=False)
+    ok("rank render: verdicts + invite", "worse than ~90%" in rendered_r
+       and "agentburn --submit" in rendered_r)
+    empty = render_rank([], {"n": 1}, color=False)
+    ok("rank: graceful when index insufficient", "be one of the first" in empty)
+
+    r_sub = subprocess.run([sys.executable, "-m", "agentburn.cli", "--submit", "--agent", "hermes",
+                            "--db", env_db], capture_output=True, text=True)
+    ok("cli --submit: payload + link, nothing sent",
+       r_sub.returncode == 0 and "issues/new" in r_sub.stdout and "Nothing was sent" in r_sub.stdout)
+    bench = os.path.join(tempfile.mkdtemp(), "bench.json")
+    with open(bench, "w") as f:
+        json.dump(agg, f)
+    r_rank = subprocess.run([sys.executable, "-m", "agentburn.cli", "rank", "--agent", "hermes",
+                             "--db", env_db, "--benchmark-file", bench, "--no-color"],
+                            capture_output=True, text=True)
+    ok("cli rank: end-to-end vs local index", r_rank.returncode == 0 and "Burn Index" in r_rank.stdout)
+
     print(f"\nAll {PASSED} checks passed.")
 
 
