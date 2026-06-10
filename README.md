@@ -26,6 +26,25 @@ uvx agentburn
 
 ---
 
+## What is this, in plain words?
+
+You run an AI assistant — OpenClaw, Hermes Agent, or Claude Code. It works around the clock: answers you in Telegram, runs scheduled jobs at night, spawns helper agents. Every word it reads and writes costs money — and the bill arrives as **one number with no explanation**.
+
+agentburn is a free tool that reads your assistant's own diary (log files already sitting on your computer) and turns that number into answers:
+
+| You ask | It answers | Command |
+|---|---|---|
+| Where does the money actually go? | scheduled jobs 79% · chats 7% · helpers 5% · you 9% | `agentburn` |
+| What happened while I slept? | the overnight bill, isolated and named | `agentburn` |
+| Why is it so expensive? | same file read 14×, a broken tool retried 6×, wake-ups that did nothing | `agentburn why` |
+| What did it do in Telegram? | every function it called there, with counts and errors | `agentburn why --source telegram` |
+| What exactly do I change? | ready config lines + expected saving in dollars | `agentburn fix` |
+| Am I paying for a dying model? | your spend vs the world's 4-week trend, with a cheaper rising alternative | `agentburn drift` |
+| Is my setup even normal? | "your overhead is worse than ~75% of N setups" | `agentburn rank` |
+| Can I just ask the assistant? | yes — install the skill/MCP and ask *"where do you burn my money?"* | `agentburn mcp` |
+
+No accounts. No cloud. Nothing leaves your computer. One command to try: `uvx agentburn`.
+
 ## Why this exists
 
 Always-on agents bill you around the clock — and their built-in counters only show totals. Real threads that made this tool:
