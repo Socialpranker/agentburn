@@ -3,8 +3,29 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>agentburn playground — try it in your browser</title>
-<meta name="description" content="Interactive simulation of agentburn: see where an AI agent burns money. No install, sample data.">
+<title>agentburn — where does my AI agent spend tokens and money? (Hermes, OpenClaw, Claude Code)</title>
+<meta name="description" content="Find out where your AI agent burns tokens and money: by source (cron, telegram, cli, subagents), night burn, re-read loops, retry storms. Local-only profiler for Hermes Agent, OpenClaw and Claude Code. Try the simulation in your browser — the real tool is `uvx agentburn`.">
+<link rel="canonical" href="https://socialpranker.github.io/agentburn/">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[
+ {"@type":"SoftwareApplication","name":"agentburn","applicationCategory":"DeveloperApplication",
+  "operatingSystem":"macOS, Linux, Windows","url":"https://socialpranker.github.io/agentburn/",
+  "codeRepository":"https://github.com/Socialpranker/agentburn",
+  "installUrl":"https://pypi.org/project/agentburn/",
+  "description":"Local, read-only profiler that shows where an AI agent (Hermes Agent, OpenClaw, Claude Code) burns tokens and money: by source, by hour, per cron run, plus behavioral forensics (re-read loops, retry storms, idle heartbeats) and dry-run config fixes.",
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"license":"https://opensource.org/licenses/MIT"},
+ {"@type":"FAQPage","mainEntity":[
+  {"@type":"Question","name":"How do I see where my AI agent spends tokens and money?",
+   "acceptedAnswer":{"@type":"Answer","text":"Run `uvx agentburn` — it reads your agent's own local logs (Hermes state.db, OpenClaw sessions, Claude Code transcripts) and breaks spend down by source: cron, telegram/discord gateways, cli, subagents, plus an hourly night-burn strip. Local-only, read-only, nothing leaves your machine."}},
+  {"@type":"Question","name":"Why is my Hermes Agent or OpenClaw bill so high at night?",
+   "acceptedAnswer":{"@type":"Answer","text":"Usually scheduled work: cron jobs and heartbeats running on an expensive model while you sleep. `agentburn` shows the exact night share and `agentburn fix` proposes paste-ready config patches (cheap model for cron, heartbeat activeHours) with estimated $/month savings."}},
+  {"@type":"Question","name":"What is my agent actually doing with all those tokens?",
+   "acceptedAnswer":{"@type":"Answer","text":"`agentburn why` reconstructs behavior from the agent's records: which functions it called, re-read loops (same file paid N times), retry storms, idle heartbeats that did nothing, per-cron-run receipts, and context-window compactions."}},
+  {"@type":"Question","name":"Does agentburn send my data anywhere?",
+   "acceptedAnswer":{"@type":"Answer","text":"No. It is stdlib-only Python, reads logs locally and prints to your terminal. Optional commands that touch the network are explicit: `drift` GETs a public trends JSON; `--submit` only opens a prefilled GitHub issue you review and send yourself."}}
+ ]}
+]}
+</script>
 <style>
   :root { --bg:#0b0d10; --panel:#14181d; --border:#242a31; --t:#e6e9ec; --d:#8a949e; --dd:#5c6670;
           --hot:#f7775a; --blue:#5ab0f7; --amber:#f5d76e; --purple:#c89bf7; --green:#7df0a8; --red:#f7a08a; }
@@ -64,6 +85,28 @@
   <p class="note">Supports Hermes Agent, OpenClaw and Claude Code ·
      <a href="https://github.com/Socialpranker/agentburn">GitHub</a> ·
      <a href="https://github.com/Socialpranker/token-history">token-history (the world side)</a></p>
+
+  <section style="margin-top:34px; color:var(--d); font-size:14px; line-height:1.65">
+    <h2 style="color:var(--t); font-size:18px">FAQ</h2>
+    <p><b style="color:var(--t)">How do I see where my AI agent spends tokens and money?</b><br>
+       Run <code>uvx agentburn</code>. It reads your agent's own local logs — Hermes Agent
+       (<code>~/.hermes/state.db</code>), OpenClaw (sessions), Claude Code (transcripts) — and breaks spend down
+       by source: cron, telegram/discord gateways, cli, subagents, plus a night-burn strip (00:00–08:00).
+       Local-only, read-only, zero dependencies; nothing leaves your machine.</p>
+    <p><b style="color:var(--t)">Why is my agent's bill so high at night?</b><br>
+       Usually scheduled work: cron jobs and heartbeats on an expensive model while you sleep.
+       <code>agentburn fix</code> proposes paste-ready config patches (cheap model for cron, heartbeat
+       activeHours) with estimated $/month savings — dry-run, it never edits files itself.</p>
+    <p><b style="color:var(--t)">What is the agent actually doing with all those tokens?</b><br>
+       <code>agentburn why</code> reconstructs behavior from the agent's records: functions called, re-read
+       loops (same file paid N times), retry storms, idle heartbeats, per-cron-run receipts, context-window
+       compactions. Observations with evidence, not verdicts.</p>
+    <p><b style="color:var(--t)">How is this different from ccusage or built-in /usage?</b><br>
+       Those total one agent's spend. agentburn is cross-agent (Hermes, OpenClaw, Claude Code), attributes spend
+       to <i>sources</i> and <i>behavior</i>, compares your models against world usage trends
+       (<code>agentburn drift</code>), and ranks your efficiency against anonymous community percentiles
+       (<code>agentburn rank</code>).</p>
+  </section>
 </div>
 
 <script>
