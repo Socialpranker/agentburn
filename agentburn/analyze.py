@@ -136,8 +136,13 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
         reverse=True,
     )[:5]
 
+    # Everything the model reads on each call, cache included. Counting only
+    # uncached input understates agents that rely on prompt caching (on Claude
+    # Code nearly all input arrives as cache reads, which made this read ~165
+    # tokens/call against a real ~154k — and turned the baseline comparison into
+    # a meaningless "−89%").
     overhead = {
-        src: round(b.input_tokens / b.api_calls)
+        src: round((b.input_tokens + b.cache_read_tokens) / b.api_calls)
         for src, b in by_source.items()
         if b.api_calls > 0
     }

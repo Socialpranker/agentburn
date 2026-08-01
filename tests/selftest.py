@@ -153,8 +153,10 @@ def main():
     ok("night share ≥ 25% of spend", a.night.cost / a.total.cost >= 0.25)
     ok("cron tops by_source", next(iter(a.by_source)) == "cron")
     ok("overhead per call: cron heavy", a.overhead_per_call["cron"] == 15_000)
-    ok("overhead per call: telegram 4x cli", a.overhead_per_call["gateway:telegram"] == 20_000
-       and a.overhead_per_call["cli"] == 5_000)
+    # cli reads 50k of its input from cache; overhead counts cached input too,
+    # so cli is 7.5k/call (not 5k) and telegram outweighs it 2.7×, not 4×.
+    ok("overhead per call counts cached input", a.overhead_per_call["gateway:telegram"] == 20_000
+       and a.overhead_per_call["cli"] == 7_500)
     ok("subagent rollup chains to root cli1",
        len(a.rollups) == 1 and a.rollups[0].id == "cli1"
        and abs(a.rollups[0].sub_cost - 2.5) < 1e-6 and a.rollups[0].sub_sessions == 2)
