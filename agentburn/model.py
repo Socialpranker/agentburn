@@ -56,7 +56,9 @@ class ActionEvent:
     session_id: str
     ts: Optional[float]
     name: str  # tool name
-    arg_key: Optional[str] = None  # salient argument (file path / command / url), truncated
+    arg_key: Optional[str] = (
+        None  # salient argument (file path / command / url), truncated
+    )
     ok: Optional[bool] = None  # False when the agent recorded an error result
     tokens: Optional[int] = None  # result weight when the agent recorded it
 
@@ -71,6 +73,36 @@ class DumpComposition:
     history_share: float
 
 
+_AGENT_LABELS = {
+    "hermes": "Hermes",
+    "openclaw": "OpenClaw",
+    "claude-code": "Claude Code",
+}
+
+# Storage the user would name in an upstream bug report, per agent.
+_AGENT_STORES = {
+    "hermes": "`~/.hermes/state.db`",
+    "openclaw": "the local transcript store",
+    "claude-code": "`~/.claude/projects/**.jsonl`",
+}
+
+
+def agent_key(agent: str) -> str:
+    """Bare adapter key. `behavior` may append ` · <project>` to Snapshot.agent."""
+    return agent.split(" · ", 1)[0]
+
+
+def agent_label(agent: str) -> str:
+    """Human-facing agent name ("claude-code" → "Claude Code")."""
+    key = agent_key(agent)
+    return _AGENT_LABELS.get(key, key)
+
+
+def agent_store(agent: str) -> str:
+    """How to refer to this agent's local data in a report."""
+    return _AGENT_STORES.get(agent_key(agent), "its local store")
+
+
 @dataclass
 class Snapshot:
     agent: str  # "hermes" | "openclaw" | "claude-code"
@@ -83,5 +115,9 @@ class Snapshot:
     warnings: list[str] = field(default_factory=list)
     # behavioral layer (filled when the adapter can see actions/outcomes)
     events: list[ActionEvent] = field(default_factory=list)
-    outcomes: dict = field(default_factory=dict)  # session_id → "failed" | "timeout" | …
-    compactions: dict = field(default_factory=dict)  # session_id → count of context compactions
+    outcomes: dict = field(
+        default_factory=dict
+    )  # session_id → "failed" | "timeout" | …
+    compactions: dict = field(
+        default_factory=dict
+    )  # session_id → count of context compactions

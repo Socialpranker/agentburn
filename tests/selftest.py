@@ -238,6 +238,21 @@ def main():
     doc = render_doctor(snap, color=False)
     ok("doctor: ready-to-paste issue block", "### Token accounting gaps" in doc and "LOWER BOUND" in doc)
     ok("doctor: privacy note", "No message content" in doc)
+    ok("doctor: hermes report cites the hermes issue and db",
+       "hermes-agent/issues/12023" in doc and "~/.hermes/state.db" in doc)
+    # The report gets pasted into an upstream tracker: it must name the agent the
+    # data actually came from, never another project's issue.
+    from dataclasses import replace
+    from agentburn.model import Snapshot
+    zero_sess = next(s for s in snap.sessions if s.message_count > 0 and s.total_tokens == 0)
+    cc_snap = Snapshot(agent="claude-code · Arcana", source_path="/x",
+                       generated_at=time.time(), days=30)
+    cc_snap.sessions = [replace(zero_sess, id="cc1")]
+    cc_doc = render_doctor(cc_snap, color=False)
+    ok("doctor: claude-code report does not cite the hermes tracker",
+       "hermes-agent" not in cc_doc and "state.db" not in cc_doc)
+    ok("doctor: claude-code report names its own agent and store",
+       "Claude Code accounting health" in cc_doc and "~/.claude/projects" in cc_doc)
 
     print("openclaw adapter:")
     from agentburn.adapters import openclaw

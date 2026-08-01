@@ -12,9 +12,15 @@ from __future__ import annotations
 import time
 from collections import Counter
 
-from .model import Snapshot
+from .model import Snapshot, agent_key, agent_label, agent_store
 
-KNOWN_ISSUES = "https://github.com/NousResearch/hermes-agent/issues/12023"
+# Upstream issue describing zero-usage streams, per agent. Only cite it where it
+# actually applies — pointing a Claude Code user at the Hermes tracker sends the
+# report to the wrong project.
+KNOWN_ISSUES_BY_AGENT = {
+    "hermes": "https://github.com/NousResearch/hermes-agent/issues/12023",
+}
+KNOWN_ISSUES = KNOWN_ISSUES_BY_AGENT["hermes"]  # back-compat
 
 
 def diagnose(snap: Snapshot) -> dict:
@@ -42,14 +48,24 @@ def render_doctor(snap: Snapshot, color: bool = True) -> str:
     d = diagnose(snap)
     b = (lambda s: f"\033[1m{s}\033[0m") if color else (lambda s: s)
     y = (lambda s: f"\033[33m{s}\033[0m") if color else (lambda s: s)
-    out = ["", b(f"🩺 agentburn doctor — {snap.agent} accounting health"), ""]
+    out = [
+        "",
+        b(f"🩺 agentburn doctor — {agent_label(snap.agent)} accounting health"),
+        "",
+    ]
     out.append(f"   sessions inspected : {d['sessions']}")
-    out.append(f"   zero-usage sessions: {d['zero_total']} (messages exist, tokens recorded = 0)")
-    out.append(f"   unpriced sessions  : {d['unpriced_total']} (tokens exist, no cost recorded)")
+    out.append(
+        f"   zero-usage sessions: {d['zero_total']} (messages exist, tokens recorded = 0)"
+    )
+    out.append(
+        f"   unpriced sessions  : {d['unpriced_total']} (tokens exist, no cost recorded)"
+    )
     out.append("")
 
     if d["zero_total"] == 0 and d["unpriced_total"] == 0:
-        out.append("   ✅ accounting looks healthy — every number in `agentburn` is trustworthy.")
+        out.append(
+            "   ✅ accounting looks healthy — every number in `agentburn` is trustworthy."
+        )
         out.append("")
         return "\n".join(out)
 
@@ -78,17 +94,33 @@ def issue_markdown(snap: Snapshot, d: dict) -> str:
     lines = [
         f"### Token accounting gaps: {d['zero_total']} zero-usage / {d['unpriced_total']} unpriced sessions",
         "",
-        f"Scanned {d['sessions']} sessions in local `state.db` on {date} "
+        f"Scanned {d['sessions']} {agent_label(snap.agent)} sessions in "
+        f"{agent_store(snap.agent)} on {date} "
         f"(read-only, via [agentburn](https://github.com/Socialpranker/agentburn) doctor).",
         "",
     ]
     if d["zero_groups"]:
-        lines += ["**Sessions with messages but zero recorded usage** (likely streaming without usage payload — see " + KNOWN_ISSUES + "):", ""]
-        lines += [f"- {n} × `{prov}` / `{model}` / source `{src}`" for (prov, model, src), n in d["zero_groups"]]
+        known = KNOWN_ISSUES_BY_AGENT.get(agent_key(snap.agent))
+        ref = f" — see {known}" if known else ""
+        lines += [
+            "**Sessions with messages but zero recorded usage** "
+            f"(likely streaming without usage payload{ref}):",
+            "",
+        ]
+        lines += [
+            f"- {n} × `{prov}` / `{model}` / source `{src}`"
+            for (prov, model, src), n in d["zero_groups"]
+        ]
         lines.append("")
     if d["unpriced_groups"]:
-        lines += ["**Sessions with tokens but no recorded cost** (pricing table gap?):", ""]
-        lines += [f"- {n} × `{prov}` / `{model}` / source `{src}`" for (prov, model, src), n in d["unpriced_groups"]]
+        lines += [
+            "**Sessions with tokens but no recorded cost** (pricing table gap?):",
+            "",
+        ]
+        lines += [
+            f"- {n} × `{prov}` / `{model}` / source `{src}`"
+            for (prov, model, src), n in d["unpriced_groups"]
+        ]
         lines.append("")
     lines += [
         "Happy to provide schema-level details (`PRAGMA table_info`) or re-run with a debug flag.",

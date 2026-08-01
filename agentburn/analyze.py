@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .model import SessionRec, Snapshot
+from .model import SessionRec, Snapshot, agent_key, agent_label
 
 
 @dataclass
@@ -66,7 +66,9 @@ class Analysis:
     daily_cost: Optional[float]
     monthly_projection: Optional[float]
     warnings: list = field(default_factory=list)
-    overhead_uncached: dict = field(default_factory=dict)  # source -> avg uncached input/call
+    overhead_uncached: dict = field(
+        default_factory=dict
+    )  # source -> avg uncached input/call
     cache_share: dict = field(default_factory=dict)  # source -> cached share of input
 
 
@@ -99,9 +101,7 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
         bases.add(s.cost_basis)
 
     bases.discard("unknown")
-    cost_basis = (
-        "unknown" if not bases else bases.pop() if len(bases) == 1 else "mixed"
-    )
+    cost_basis = "unknown" if not bases else bases.pop() if len(bases) == 1 else "mixed"
 
     # subagent costs rolled up to their root parents
     by_id = {s.id: s for s in snap.sessions}
@@ -169,32 +169,28 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
     )
     daily = (total.cost / span_days) if (span_days and total.cost_known) else None
 
-    agent_label = {
-        "hermes": "Hermes",
-        "openclaw": "OpenClaw",
-        "claude-code": "Claude Code",
-    }.get(snap.agent, snap.agent)
+    label = agent_label(snap.agent)
 
     warnings = list(snap.warnings)
     if zero_token > 0:
         gap_note = (
             " (e.g. streaming without usage, hermes-agent #12023)"
-            if snap.agent == "hermes"
+            if agent_key(snap.agent) == "hermes"
             else ""
         )
         warnings.append(
             f"{zero_token} session(s) have messages but zero recorded tokens — "
-            f"{agent_label} accounting gaps{gap_note}. "
+            f"{label} accounting gaps{gap_note}. "
             "All totals are a LOWER BOUND."
         )
     if cost_basis == "estimated":
         warnings.append(
-            f"Costs are {agent_label}'s own estimates, not provider-billed actuals."
+            f"Costs are {label}'s own estimates, not provider-billed actuals."
         )
     if cost_basis == "mixed":
-        warnings.append(f"Costs mix provider-billed actuals and {agent_label} estimates.")
+        warnings.append(f"Costs mix provider-billed actuals and {label} estimates.")
     if cost_basis == "unknown" and total.tokens > 0:
-        warnings.append(f"No cost data recorded by {agent_label} — token counts only.")
+        warnings.append(f"No cost data recorded by {label} — token counts only.")
 
     return Analysis(
         agent=snap.agent,
@@ -203,8 +199,12 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
         period_start=period_start,
         period_end=snap.generated_at,
         total=total,
-        by_source=dict(sorted(by_source.items(), key=lambda kv: kv[1].cost, reverse=True)),
-        by_model=dict(sorted(by_model.items(), key=lambda kv: kv[1].cost, reverse=True)),
+        by_source=dict(
+            sorted(by_source.items(), key=lambda kv: kv[1].cost, reverse=True)
+        ),
+        by_model=dict(
+            sorted(by_model.items(), key=lambda kv: kv[1].cost, reverse=True)
+        ),
         tools=snap.tools[:10],
         night=night,
         night_by_source=dict(
