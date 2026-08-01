@@ -116,7 +116,9 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
     out.append("")
 
     cost_total = a.total.cost or 0.0
-    if a.by_source:
+    # With a single source the breakdown always reads "100% — you", which tells
+    # nobody anything. Only worth printing when there is something to compare.
+    if len(a.by_source) > 1:
         out.append(p.b("   WHERE IT BURNS"))
         out.append(p.dim("   which part of your setup spends the money — scheduled jobs, messenger gateways, subagents or you"))
         for src, b in list(a.by_source.items())[:8]:
