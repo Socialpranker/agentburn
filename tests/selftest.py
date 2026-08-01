@@ -194,6 +194,27 @@ def main():
     ok("card: one thought per line, no nested parens", "((" not in card and ") (" not in card)
     ok("card: NO session titles leak", "nightly digest" not in card and "refactor" not in card)
     ok("card: footer with repo + privacy", "local & private" in card)
+
+    # A cache-heavy run must not be advertised as a resend tax: overhead_per_call
+    # includes cache reads, and claiming those inverts the finding (98% below the
+    # baseline reads as 27x above it). Regression for the share card specifically.
+    import copy as _copy
+    from agentburn.share import overhead_headline
+    a_cached = _copy.deepcopy(a)
+    a_cached.overhead_per_call = {"cli": 214_829}
+    a_cached.overhead_uncached = {"cli": 158}
+    a_cached.cache_share = {"cli": 1.0}
+    head = overhead_headline(a_cached)
+    ok("card: cache-heavy overhead calibrates on uncached, not cache reads",
+       "158" in head and "214,829" not in head.split("—")[0] and "26.9" not in head)
+    ok("card: cache-heavy overhead states the cache share",
+       "100% served from cache" in head and "214,829/call total" in head)
+    card_cached = share_text(a_cached)
+    ok("card: cache-heavy card never claims 27x the norm", "26.9" not in card_cached)
+    ok("card: sub-baseline overhead reads as a percentage, not '0.0x'",
+       "below the community norm" in head and "0.0×" not in head)
+    ok("svg card: uses the same overhead headline as text",
+       overhead_headline(a) in share_svg(a).replace("&amp;", "&"))
     svg = share_svg(a)
     ok("svg card: valid-ish and anonymous", svg.startswith("<svg") and "refactor" not in svg and "$45.50" in svg)
     ok("svg card: designed layout (bars, night strip, privacy footer)",

@@ -30,11 +30,18 @@ REFERENCE_BASELINE = PHALA_2026_03["baseline_tokens_per_call"]
 
 
 def overhead_vs_reference_short(avg_input_per_call: int) -> str:
-    """Card-friendly: '2.5× the community norm (≈8k)' — no nested citations."""
+    """Card-friendly: '2.5× the community norm (≈8k)' — no nested citations.
+
+    Below the baseline the multiplier degenerates ('0.0× the norm' says nothing),
+    so a run that beats the norm is phrased as a percentage under it instead.
+    """
     if avg_input_per_call <= 0:
         return ""
+    norm = f"the community norm (≈{REFERENCE_BASELINE // 1000}k)"
     ratio = avg_input_per_call / REFERENCE_BASELINE
-    return f"{ratio:.1f}× the community norm (≈{REFERENCE_BASELINE // 1000}k)"
+    if ratio < 1:
+        return f"{1 - ratio:.0%} below {norm}"
+    return f"{ratio:.1f}× {norm}"
 
 
 def overhead_vs_reference(avg_input_per_call: int) -> str:

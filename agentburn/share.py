@@ -14,6 +14,34 @@ from .report import fmt_money, fmt_tokens
 REPO = "github.com/Socialpranker/agentburn"
 
 
+def overhead_headline(a: Analysis) -> str:
+    """The overhead claim for a public card — one place, both renderers.
+
+    `overhead_per_call` includes cache reads, which are neither re-sent at full
+    price nor what the community baseline measures. Claiming them as a resend
+    tax inverts the finding: a run that is 98% BELOW the baseline reads as 27x
+    above it. So the headline number, and every comparison, use the uncached
+    figure; the cache-inclusive total is only shown as context beside it.
+    """
+    if not a.overhead_per_call:
+        return ""
+    src, total = max(a.overhead_per_call.items(), key=lambda kv: kv[1])
+    if total <= 0:
+        return ""
+
+    uncached = a.overhead_uncached.get(src, total)
+    label = src.replace("gateway:", "")
+    ref = overhead_vs_reference_short(uncached)
+    tail = f" — {ref}" if ref else ""
+
+    cached = a.cache_share.get(src)
+    if cached is not None and cached >= 0.5:
+        # The honest headline: the resend tax is mostly cached away.
+        return (f"{label} re-sends {uncached:,} uncached tokens with EVERY call{tail}"
+                f" ({total:,}/call total, {cached:.0%} served from cache)")
+    return f"{label} re-sends {uncached:,} tokens with EVERY call{tail}"
+
+
 def share_text(a: Analysis) -> str:
     """One clear thought per line, no nested parentheses, no jargon."""
     basis = a.cost_basis
@@ -45,14 +73,9 @@ def share_text(a: Analysis) -> str:
             f"{fmt_money(a.night.cost, basis)} — {share:.0%} of everything"
         )
 
-    if a.overhead_per_call:
-        src, v = max(a.overhead_per_call.items(), key=lambda kv: kv[1])
-        if v > 0:
-            ref = overhead_vs_reference_short(v)
-            lines.append(
-                f"⚙️ {src.replace('gateway:', '')} re-sends {v:,} tokens with EVERY call"
-                + (f" — {ref}" if ref else "")
-            )
+    overhead_line = overhead_headline(a)
+    if overhead_line:
+        lines.append(f"⚙️ {overhead_line}")
 
     top_model = next(iter(a.by_model), None)
     if top_model and top_model != "unknown":
@@ -141,15 +164,10 @@ def share_svg(a: Analysis, width: int = 640) -> str:
         )
         y += 36
 
-    if a.overhead_per_call:
-        src, v = max(a.overhead_per_call.items(), key=lambda kv: kv[1])
-        if v > 0:
-            from .benchmarks import overhead_vs_reference_short
-
-            y += 26
-            ref = overhead_vs_reference_short(v)
-            line = f"{src.replace('gateway:', '')} re-sends {v:,} tokens with every call" + (f" — {ref}" if ref else "")
-            parts.append(t(28, y, 12.5, "#8a949e", esc(line)))
+    overhead_line = overhead_headline(a)
+    if overhead_line:
+        y += 26
+        parts.append(t(28, y, 12.5, "#8a949e", esc(overhead_line)))
 
     y += 28
     parts.append(t(28, y, 12, "#5c6670", "local &amp; private — nothing left my machine"))
