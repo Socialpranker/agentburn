@@ -100,8 +100,11 @@ def build_fixes(agent: str, source_path: str, a: Analysis, brep=None) -> list:
             )
             patches.append(p)
 
+        # uncached input only: trimming a toolset shrinks what is resent, not
+        # what is served from cache
+        _per_call = a.overhead_uncached or a.overhead_per_call
         heavy_gw = {
-            s: v for s, v in a.overhead_per_call.items() if s.startswith("gateway:") and v >= 12_000
+            s: v for s, v in _per_call.items() if s.startswith("gateway:") and v >= 12_000
         }
         if heavy_gw:
             gw = max(heavy_gw, key=heavy_gw.get)

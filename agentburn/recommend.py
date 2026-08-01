@@ -61,8 +61,11 @@ def recommend(a: Analysis) -> list:
             f"(≈{_money(monthly)}/mo).{hint} Point cron jobs at a cheap model in config.{saving}"
         )
 
-    # 3. fixed overhead per call
-    heavy = {s: v for s, v in a.overhead_per_call.items() if v >= 12000}
+    # 3. fixed overhead per call — judged on uncached input only. Cache reads are
+    # cheap and largely outside the user's control; trimming toolsets does not
+    # shrink them, so firing this advice on a cache-inflated figure misleads.
+    per_call = a.overhead_uncached or a.overhead_per_call
+    heavy = {s: v for s, v in per_call.items() if v >= 12000}
     if heavy:
         worst = max(heavy, key=heavy.get)
         comp = a.composition

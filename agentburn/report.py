@@ -189,9 +189,21 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
         out.append(p.dim("   the silent tax: tool definitions + system prompt re-sent with every single request"))
         ranked = sorted(a.overhead_per_call.items(), key=lambda kv: kv[1], reverse=True)
         for i, (src, v) in enumerate(ranked[:5]):
-            flag = p.red(" ← heavy") if v >= 12000 else ""
-            ref = p.dim(f"   {overhead_vs_reference(v)}") if i == 0 and v > 0 else ""
+            # The baseline counts uncached instruction tokens, so calibrate
+            # against the uncached figure — never the cache-inclusive one.
+            uncached = a.overhead_uncached.get(src, v)
+            # "heavy" means an actual resend tax, which cache reads are not
+            flag = p.red(" ← heavy") if uncached >= 12000 else ""
+            ref = p.dim(f"   {overhead_vs_reference(uncached)}") if i == 0 and uncached > 0 else ""
             out.append(f"   {src:<20} {v:>8,}{flag}{ref}")
+            cached = a.cache_share.get(src)
+            if i == 0 and cached is not None and cached >= 0.5:
+                out.append(
+                    p.dim(
+                        f"      {cached:.0%} of that is cache reads "
+                        f"({uncached:,}/call uncached — what the baseline measures)"
+                    )
+                )
         if a.composition:
             c = a.composition
             out.append(

@@ -68,7 +68,9 @@ def build_metrics(analyses: list, breps: list) -> dict:
     monthly = 0.0
     monthly_known = False
     for a in analyses:
-        for src, v in a.overhead_per_call.items():
+        # uncached input keeps the metric comparable across agents: caching is a
+        # property of the provider/agent, not of how efficiently a setup is run
+        for src, v in (a.overhead_uncached or a.overhead_per_call).items():
             if src == "cli":
                 oh_cli.append(v)
             elif src.startswith("gateway:"):

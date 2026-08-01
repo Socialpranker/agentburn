@@ -58,7 +58,7 @@ class Analysis:
     night_by_source: dict
     night_window: tuple
     rollups: list
-    overhead_per_call: dict  # source -> avg input tokens per api call
+    overhead_per_call: dict  # source -> avg input tokens per api call (cache included)
     composition: object
     cost_basis: str  # actual | estimated | mixed | unknown
     zero_token_sessions: int
@@ -66,6 +66,8 @@ class Analysis:
     daily_cost: Optional[float]
     monthly_projection: Optional[float]
     warnings: list = field(default_factory=list)
+    overhead_uncached: dict = field(default_factory=dict)  # source -> avg uncached input/call
+    cache_share: dict = field(default_factory=dict)  # source -> cached share of input
 
 
 def _is_night(ts: float, window: tuple) -> bool:
@@ -139,12 +141,25 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
     # Everything the model reads on each call, cache included. Counting only
     # uncached input understates agents that rely on prompt caching (on Claude
     # Code nearly all input arrives as cache reads, which made this read ~165
-    # tokens/call against a real ~154k — and turned the baseline comparison into
-    # a meaningless "−89%").
+    # tokens/call against a real ~154k).
     overhead = {
         src: round((b.input_tokens + b.cache_read_tokens) / b.api_calls)
         for src, b in by_source.items()
         if b.api_calls > 0
+    }
+    # The community baseline measures uncached instruction/bootstrap tokens, so
+    # only the uncached part may be compared against it. Cached input is cheap
+    # and mostly out of the user's hands — comparing the cache-inclusive figure
+    # to an 8k baseline produces a meaningless "+2586%".
+    overhead_uncached = {
+        src: round(b.input_tokens / b.api_calls)
+        for src, b in by_source.items()
+        if b.api_calls > 0
+    }
+    cache_share = {
+        src: (b.cache_read_tokens / (b.input_tokens + b.cache_read_tokens))
+        for src, b in by_source.items()
+        if (b.input_tokens + b.cache_read_tokens) > 0
     }
 
     starts = [s.started_at for s in snap.sessions if s.started_at]
@@ -205,4 +220,6 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
         daily_cost=daily,
         monthly_projection=daily * 30 if daily is not None else None,
         warnings=warnings,
+        overhead_uncached=overhead_uncached,
+        cache_share=cache_share,
     )
