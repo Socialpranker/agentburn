@@ -42,7 +42,6 @@ agentburn is a free tool that reads your assistant's own diary (log files alread
 | What did it do in Telegram? | every function it called there, with counts and errors | `agentburn why --source telegram` |
 | What exactly do I change? | ready config lines + expected saving in dollars | `agentburn fix` |
 | Am I paying for a dying model? | your spend vs the world's 4-week trend, with a cheaper rising alternative | `agentburn drift` |
-| Is my setup even normal? | "your overhead is worse than ~75% of N setups" | `agentburn rank` |
 | Can I just ask the assistant? | yes — install the skill/MCP and ask *"where do you burn my money?"* | `agentburn mcp` |
 
 No accounts. No cloud. Nothing leaves your computer. One command to try: `uvx agentburn`.
@@ -179,15 +178,7 @@ Your side is computed locally from the agents' own logs; the world side is one r
 
 **🩺 `agentburn why` additions:** **CRON RUNS** — the per-run receipt for every scheduled job (what [openclaw #24636](https://github.com/openclaw/openclaw/issues/24636) keeps asking for), and **CONTEXT THRASH** — compactions counted per session, because every compaction silently re-sends a near-full context window.
 
-**📊 `agentburn rank` + `--submit` — the Burn Index.** Anonymous community percentiles of *efficiency* — the benchmark volume-leaderboards can't be: nothing here rewards burning more.
-
-```text
-📊 agentburn rank — you vs the Burn Index
-
-   input tokens per call · cli              you:    15,000   median:    6,200   worse than ~75% of 41
-   share of spend at night                  you:     79.0%   median:    12.0%   worse than ~90% of 41
-   cache-read share of input volume         you:     61.0%   median:    44.0%   better than ~75% of 41
-```
+**📊 `agentburn rank` + `--submit` — the Burn Index (empty so far).** Anonymous community percentiles of *efficiency* — the benchmark volume-leaderboards can't be: nothing here rewards burning more. **No submissions yet**, so `rank` currently tells you exactly that and invites you to be the first; percentiles need 5+ setups per metric before they mean anything.
 
 Joining is consent-by-click: `agentburn --submit` prints the exact anonymized payload (ratios and a coarse spend band — never raw volumes, titles or paths), then a prefilled GitHub-issue link that **you** open and submit. A weekly Action aggregates submissions with plausibility bounds (junk and flexing get dropped, not ranked) into public quantiles.
 
