@@ -185,23 +185,30 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
     if a.overhead_per_call:
         from .benchmarks import overhead_vs_reference
 
-        out.append(p.b("   FIXED OVERHEAD — avg input tokens per API call"))
+        out.append(p.b("   FIXED OVERHEAD — avg uncached input tokens per API call"))
         out.append(p.dim("   the silent tax: tool definitions + system prompt re-sent with every single request"))
-        ranked = sorted(a.overhead_per_call.items(), key=lambda kv: kv[1], reverse=True)
+        # Lead with the uncached figure: it is what actually gets re-sent at full
+        # price and what the baseline measures. Ranking by the cache-inclusive
+        # total would order the rows by a number no longer shown.
+        ranked = sorted(
+            a.overhead_per_call.items(),
+            key=lambda kv: a.overhead_uncached.get(kv[0], kv[1]),
+            reverse=True,
+        )
         for i, (src, v) in enumerate(ranked[:5]):
-            # The baseline counts uncached instruction tokens, so calibrate
-            # against the uncached figure — never the cache-inclusive one.
             uncached = a.overhead_uncached.get(src, v)
             # "heavy" means an actual resend tax, which cache reads are not
             flag = p.red(" ← heavy") if uncached >= 12000 else ""
             ref = p.dim(f"   {overhead_vs_reference(uncached)}") if i == 0 and uncached > 0 else ""
-            out.append(f"   {src:<20} {v:>8,}{flag}{ref}")
+            out.append(f"   {src:<20} {uncached:>8,}{flag}{ref}")
             cached = a.cache_share.get(src)
-            if i == 0 and cached is not None and cached >= 0.5:
+            # Every heavily-cached row needs this, not just the first: without it
+            # a small uncached number looks like the whole story.
+            if cached is not None and cached >= 0.5 and v > uncached:
                 out.append(
                     p.dim(
-                        f"      {cached:.0%} of that is cache reads "
-                        f"({uncached:,}/call uncached — what the baseline measures)"
+                        f"      {v:,}/call including cache reads "
+                        f"({cached:.0%} served from cache, not re-sent at full price)"
                     )
                 )
         if a.composition:

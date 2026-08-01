@@ -178,6 +178,25 @@ def main():
         "FIXED OVERHEAD", "DO THIS", "Methodology")))
     ok("terminal: night line shows $36", "$36.00" in term)
     ok("terminal: estimates marked with ~", "~$" in term)
+
+    # FIXED OVERHEAD leads with the uncached figure — the one that is actually
+    # re-sent at full price. cli has 7,500/call including cache but 5,000 without.
+    ok("terminal: overhead shows uncached, not cache-inclusive",
+       "5,000" in term and "7,500" not in term)
+    ok("terminal: overhead header says uncached", "avg uncached input tokens" in term)
+
+    import copy as _copy
+    a_cached = _copy.deepcopy(a)
+    a_cached.overhead_per_call = {"cli": 215_288, "subagent": 80_560}
+    a_cached.overhead_uncached = {"cli": 155, "subagent": 849}
+    a_cached.cache_share = {"cli": 1.0, "subagent": 0.99}
+    term_c = render_terminal(a_cached, recs, color=False)
+    sec = term_c[term_c.find("FIXED OVERHEAD"):]
+    ok("terminal: cache-heavy rows rank by uncached, not by cache-inclusive total",
+       sec.find("subagent") < sec.find("cli"))
+    ok("terminal: every cache-heavy row explains its total, not just the first",
+       sec.count("including cache reads") == 2)
+    ok("terminal: cache-heavy row never flagged as heavy", "← heavy" not in sec)
     js = json.loads(render_json(a, recs))
     ok("json: parses & has keys", js["agentburn"] == 1 and "by_source" in js and "recommendations" in js)
     ok("json: cron bucket correct", js["by_source"]["cron"]["sessions"] == 2)
