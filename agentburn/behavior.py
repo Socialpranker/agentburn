@@ -35,6 +35,7 @@ class Storm:
     name: str
     errors: int
     calls: int
+    approx_tokens: int = 0  # 0 = unknown; estimated weight of the failed calls
 
 
 @dataclass
@@ -148,6 +149,10 @@ def analyze_behavior(snap: Snapshot, top: int = 6, source_filter: str = "") -> B
         recorded = result_tokens.get((sid, name))
         approx = int(sum(recorded) / len(recorded) * n) if recorded else 0
         rep.rereads.append(Reread(title.get(sid, sid), name, arg[:60], n, approx))
+    # cost first, repeats as the tie-break — a rare-but-heavy loop outranks a
+    # frequent-but-cheap one. Weigh every candidate before truncating, or the
+    # expensive ones get cut before they can be compared.
+    rep.rereads.sort(key=lambda r: (r.approx_tokens, r.count), reverse=True)
     rep.rereads = rep.rereads[:top]
 
     # --- retry storms: 3+ recorded errors of one tool in one session
@@ -160,7 +165,10 @@ def analyze_behavior(snap: Snapshot, top: int = 6, source_filter: str = "") -> B
     for (sid, name), n in err.most_common():
         if n < 3:
             break
-        rep.storms.append(Storm(title.get(sid, sid), name, n, tot[(sid, name)]))
+        recorded = result_tokens.get((sid, name))
+        approx = int(sum(recorded) / len(recorded) * n) if recorded else 0
+        rep.storms.append(Storm(title.get(sid, sid), name, n, tot[(sid, name)], approx))
+    rep.storms.sort(key=lambda s: (s.approx_tokens, s.errors), reverse=True)
     rep.storms = rep.storms[:top]
 
     # --- idle heartbeats (sessions classified as heartbeat that did nothing)
@@ -361,7 +369,8 @@ def render_behavior(rep: BehaviorReport, color: bool = True) -> str:
         out.append(b("   RETRY STORMS"))
         out.append(dim("   a failing tool, called again and again — paying full price for every error"))
         for s in rep.storms:
-            out.append(red(f"   {s.name}: {s.errors} errors / {s.calls} calls  in {s.session}"))
+            tok = f"  ≈{fmt_tokens(s.approx_tokens)}" if s.approx_tokens else ""
+            out.append(red(f"   {s.name}: {s.errors} errors / {s.calls} calls  in {s.session}{tok}"))
         out.append("")
 
     n, total, cost = rep.idle_heartbeats

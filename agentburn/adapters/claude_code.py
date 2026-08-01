@@ -29,6 +29,27 @@ from .hermes import salient_arg
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
+# Claude Code records no per-result token count, so result weight is estimated
+# from the text length at the usual ~4 chars/token. Char-proportional and
+# labeled an estimate — same footing as the sampled input composition, and only
+# ever used to rank findings against each other, never reported as a total.
+CHARS_PER_TOKEN = 4
+
+
+def _result_weight(content) -> int:
+    """Approximate token weight of a tool result. 0 when nothing is measurable."""
+    if isinstance(content, str):
+        return len(content) // CHARS_PER_TOKEN
+    if isinstance(content, list):
+        chars = 0
+        for block in content:
+            if isinstance(block, dict) and isinstance(block.get("text"), str):
+                chars += len(block["text"])
+            elif isinstance(block, str):
+                chars += len(block)
+        return chars // CHARS_PER_TOKEN
+    return 0
+
 
 def default_root() -> str:
     return os.path.join(os.path.expanduser("~"), ".claude", "projects")
@@ -126,6 +147,7 @@ def _scan_file(path: str, sid: str, events: list):
                                 ts=ts,
                                 name=str(name)[:40],
                                 ok=not bool(item.get("is_error")),
+                                tokens=_result_weight(item.get("content")),
                             )
                         )
     return first, last, calls, inp, out, cr, cw, model, lines, compactions
