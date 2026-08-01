@@ -129,10 +129,19 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
         out.append("")
 
     if a.night.sessions > 0:
-        share = (a.night.cost / cost_total) if cost_total > 0 else 0
+        share = (
+            (a.night.cost / cost_total)
+            if cost_total > 0
+            else (a.night.tokens / a.total.tokens if a.total.tokens else 0)
+        )
+        night_amount = (
+            fmt_money(a.night.cost, basis)
+            if a.night.cost_known
+            else f"{fmt_tokens(a.night.tokens)} tokens"
+        )
         line = (
             f"   {p.b('🌙 WHILE YOU SLEPT')} ({a.night_window[0]:02d}:00–{a.night_window[1]:02d}:00): "
-            f"{fmt_money(a.night.cost if a.night.cost_known else None, basis)}"
+            f"{night_amount}"
             f" ({share:.0%} of spend) · {a.night.sessions} sessions"
         )
         out.append(p.red(line) if share >= 0.25 else line)
@@ -161,8 +170,13 @@ def render_terminal(a: Analysis, recs: list, color: bool = True) -> str:
         out.append(p.b("   SUBAGENT ROLLUPS"))
         out.append(p.dim("   what delegation actually cost, traced back to the session that started it"))
         for r in a.rollups:
+            amount = (
+                f"+{fmt_money(r.sub_cost, basis)}"
+                if basis != "unknown"
+                else f"+{fmt_tokens(r.sub_tokens)} tokens"
+            )
             out.append(
-                f"   {r.title[:42]:<44} +{fmt_money(r.sub_cost, basis)} in {r.sub_sessions} subagent(s)"
+                f"   {r.title[:42]:<44} {amount} in {r.sub_sessions} subagent(s)"
             )
         out.append("")
 

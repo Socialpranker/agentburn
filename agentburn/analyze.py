@@ -39,6 +39,7 @@ class ParentRollup:
     model: Optional[str]
     own_cost: float
     sub_cost: float
+    sub_tokens: int
     sub_sessions: int
 
 
@@ -103,6 +104,7 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
     # subagent costs rolled up to their root parents
     by_id = {s.id: s for s in snap.sessions}
     sub_cost: dict = {}
+    sub_tokens: dict = {}
     sub_count: dict = {}
     for s in snap.sessions:
         if s.source != "subagent":
@@ -114,6 +116,7 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
             root = by_id[root.parent_id]
         if root.id != s.id:
             sub_cost[root.id] = sub_cost.get(root.id, 0.0) + (s.cost_usd or 0.0)
+            sub_tokens[root.id] = sub_tokens.get(root.id, 0) + (s.total_tokens or 0)
             sub_count[root.id] = sub_count.get(root.id, 0) + 1
     rollups = sorted(
         (
@@ -123,12 +126,13 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
                 model=by_id[pid].model,
                 own_cost=by_id[pid].cost_usd or 0.0,
                 sub_cost=c,
+                sub_tokens=sub_tokens.get(pid, 0),
                 sub_sessions=sub_count[pid],
             )
             for pid, c in sub_cost.items()
             if pid in by_id
         ),
-        key=lambda r: r.sub_cost,
+        key=lambda r: (r.sub_cost, r.sub_tokens),
         reverse=True,
     )[:5]
 
@@ -145,19 +149,32 @@ def analyze(snap: Snapshot, night_window: tuple = (0, 8)) -> Analysis:
     )
     daily = (total.cost / span_days) if (span_days and total.cost_known) else None
 
+    agent_label = {
+        "hermes": "Hermes",
+        "openclaw": "OpenClaw",
+        "claude-code": "Claude Code",
+    }.get(snap.agent, snap.agent)
+
     warnings = list(snap.warnings)
     if zero_token > 0:
+        gap_note = (
+            " (e.g. streaming without usage, hermes-agent #12023)"
+            if snap.agent == "hermes"
+            else ""
+        )
         warnings.append(
-            f"{zero_token} session(s) have messages but zero recorded tokens — known Hermes "
-            "accounting gaps (e.g. streaming without usage, hermes-agent #12023). "
+            f"{zero_token} session(s) have messages but zero recorded tokens — "
+            f"{agent_label} accounting gaps{gap_note}. "
             "All totals are a LOWER BOUND."
         )
     if cost_basis == "estimated":
-        warnings.append("Costs are Hermes' own estimates, not provider-billed actuals.")
+        warnings.append(
+            f"Costs are {agent_label}'s own estimates, not provider-billed actuals."
+        )
     if cost_basis == "mixed":
-        warnings.append("Costs mix provider-billed actuals and Hermes estimates.")
+        warnings.append(f"Costs mix provider-billed actuals and {agent_label} estimates.")
     if cost_basis == "unknown" and total.tokens > 0:
-        warnings.append("No cost data recorded by Hermes — token counts only.")
+        warnings.append(f"No cost data recorded by {agent_label} — token counts only.")
 
     return Analysis(
         agent=snap.agent,
