@@ -1,0 +1,56 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['data/**', 'docs/**', '*.md']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  selftest:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ['3.9', '3.13']
+        exclude:
+          # one interpreter per extra OS is enough: the suite is stdlib-only
+          - {os: macos-latest, python: '3.9'}
+          - {os: windows-latest, python: '3.9'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: selftest (no network, no deps)
+        run: python tests/selftest.py
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pipx install ruff
+      # F821 catches the failure mode this project has actually hit: a moved
+      # helper leaving a name behind that only blows up at runtime.
+      - run: ruff check --select F,E9 agentburn/ tools/ tests/
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pipx install build
+      - run: python -m build
+      - name: the wheel must run with zero dependencies
+        run: |
+          python -m venv /tmp/v
+          /tmp/v/bin/pip install --no-deps dist/*.whl
+          /tmp/v/bin/agentburn --version
+          /tmp/v/bin/agentburn --help > /dev/null

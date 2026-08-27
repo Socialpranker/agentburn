@@ -21,7 +21,6 @@ import os
 import urllib.request
 
 from . import prices
-from .analyze import Analysis
 from .report import fmt_money, fmt_tokens
 
 TRENDS_URL = "https://socialpranker.github.io/token-history/data/models/trends.json"

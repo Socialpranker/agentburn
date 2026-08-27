@@ -501,7 +501,6 @@ def main():
     ok("--week sets a 7-day window", json.loads(r_week.stdout)["days"] == 7)
 
     from agentburn.report import _tldr
-    from agentburn.analyze import Bucket, Analysis as _A
     empty = analyze(type(snap)(agent="hermes", source_path="x", generated_at=time.time(), days=30))
     ok("empty window → no TL;DR, friendly hint in render",
        _tldr(empty, []) == [] and "Nothing recorded" in render_terminal(empty, [], color=False))
@@ -617,8 +616,9 @@ def main():
     lines = [json.loads(l) for l in r_mcp.stdout.strip().splitlines()]
     byid = {l.get("id"): l for l in lines}
     ok("mcp: initialize → serverInfo", byid[1]["result"]["serverInfo"]["name"] == "agentburn")
-    ok("mcp: tools/list → 3 tools",
-       {t["name"] for t in byid[2]["result"]["tools"]} == {"burn_report", "burn_why", "burn_card"})
+    ok("mcp: tools/list → 4 tools",
+       {t["name"] for t in byid[2]["result"]["tools"]}
+       == {"burn_report", "burn_why", "burn_limits", "burn_card"})
     body0 = json.loads(byid[3]["result"]["content"][0]["text"])
     ok("mcp: tools/call burn_report returns the report JSON",
        byid[3]["result"]["isError"] is False and body0["agentburn"] == 1 and body0["total"]["sessions"] > 0)
@@ -643,9 +643,13 @@ def main():
                                "--db", oc_root, "--no-color"], capture_output=True, text=True)
     ok("fix: openclaw heartbeat patch (every/activeHours/lightContext)",
        all(k in r_fix_oc.stdout for k in ("heartbeat", "activeHours", "lightContext", "openclaw.json")))
+    # Bare HOME: no MCP servers registered, no CLAUDE.md — the generators must
+    # stay silent rather than invent a lever (they read the real config, so the
+    # test would otherwise depend on the machine it runs on).
     r_fix_cc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "claude-code",
-                               "--db", cc_root, "--no-color"], capture_output=True, text=True)
-    ok("fix: claude-code → honest 'no applicable patches'",
+                               "--db", cc_root, "--no-color"], capture_output=True, text=True,
+                              env=dict(os.environ, HOME=tempfile.mkdtemp()))
+    ok("fix: claude-code on a bare machine → honest 'no applicable patches'",
        r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
 
     print("prices (real snapshot):")
@@ -804,6 +808,147 @@ def main():
                              "--db", env_db, "--benchmark-file", bench, "--no-color"],
                             capture_output=True, text=True)
     ok("cli rank: end-to-end vs local index", r_rank.returncode == 0 and "Burn Index" in r_rank.stdout)
+
+
+    # ---------------------------------------------------------------- limits
+    # Subscription agents record no prices, so every claim here is about
+    # windows. The fixture is a Claude Code transcript tree, since that is the
+    # only adapter that can see per-call timestamps.
+    print("limits (subscription windows):")
+    from agentburn.adapters import claude_code as cc  # noqa: E402
+    from agentburn.limits import build_limits, limits_json, render_limits  # noqa: E402
+
+    cc_root = os.path.join(tempfile.mkdtemp(), "projects")
+    proj = os.path.join(cc_root, "-tmp-demo")
+    subdir = os.path.join(proj, "11111111-1111-4111-8111-111111111111", "subagents")
+    os.makedirs(subdir, exist_ok=True)
+    now = time.time()
+
+    def turn(ts, model, inp=0, out=0, cr=0, cw=0):
+        return json.dumps({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z",
+            "message": {"model": model, "usage": {
+                "input_tokens": inp, "output_tokens": out,
+                "cache_read_input_tokens": cr, "cache_creation_input_tokens": cw}},
+        })
+
+    # a heavy burst 20h ago, a light one 2h ago, both on the main session
+    burst_at = now - 20 * 3600
+    quiet_at = now - 2 * 3600
+    main_lines = [turn(burst_at + i * 60, "claude-opus-5", inp=1000, out=1000) for i in range(10)]
+    main_lines += [turn(quiet_at + i * 60, "claude-sonnet-5", inp=1000, out=0) for i in range(5)]
+    with open(os.path.join(proj, "11111111-1111-4111-8111-111111111111.jsonl"), "w") as f:
+        f.write("\n".join(main_lines) + "\n")
+    with open(os.path.join(subdir, "agent-1.jsonl"), "w") as f:
+        f.write(turn(burst_at + 300, "claude-sonnet-5", inp=0, out=0, cr=100_000) + "\n")
+
+    snap_cc = cc.load(db_path=cc_root, days=30, now=now)
+    ok("cc adapter: usage cells filled", len(snap_cc.usage_cells) > 0)
+    cell_tokens = sum(c.input_tokens + c.output_tokens + c.cache_read_tokens + c.cache_write_tokens
+                      for c in snap_cc.usage_cells)
+    ok("cc adapter: cells account for every token",
+       cell_tokens == sum(s_.total_tokens for s_ in snap_cc.sessions),
+       f"{cell_tokens} vs {sum(s_.total_tokens for s_ in snap_cc.sessions)}")
+
+    from agentburn.limits import token_weights  # noqa: E402
+
+    w_in, w_out, w_cr, w_cw = token_weights("claude-sonnet-5")
+    ok("weights: reference model input = 1", abs(w_in - 1.0) < 1e-9)
+    ok("weights: output is 5x input on Claude pricing", abs(w_out - 5.0) < 1e-9)
+    ok("weights: cache read is 0.1x", abs(w_cr - 0.1) < 1e-9)
+    ok("weights: cache write is 1.25x", abs(w_cw - 1.25) < 1e-9)
+    ok("weights: opus input weighs more than sonnet", token_weights("claude-opus-5")[0] > w_in)
+    ok("weights: unknown model still counts (no silent drop)",
+       token_weights("totally-unknown-model")[0] > 0)
+
+    lim = build_limits(snap_cc, now=now)
+    ok("limits: peak window found", lim.peak is not None and lim.peak.weight > 0)
+    ok("limits: peak covers the burst, not the quiet hour",
+       lim.peak.start <= burst_at + 600 and lim.peak.end >= burst_at)
+    # opus 10x(1000 in + 1000 out) = 10*(1.667 + 8.333)k = 100k; sub cache read 100k*0.1*1 = 10k
+    ok("limits: peak weight matches the arithmetic",
+       abs(lim.peak.weight - 110_000) < 1000, f"{lim.peak.weight:,.0f}")
+    ok("limits: peak split by source includes the subagent",
+       any(src == "subagent" for src, _ in lim.peak_by_source))
+    ok("limits: typical window is the median of active slots, below the peak",
+       0 < lim.typical < lim.peak.weight)
+    ok("limits: recent window counted", lim.current > 0)
+    ok("limits: mix names what filled it",
+       {k for k, _ in lim.mix} & {"output", "cache reads", "uncached input"})
+
+    lim_hit = build_limits(snap_cc, hit=burst_at + 3600, now=now)
+    ok("limits: --hit measures a ceiling from your own wall", lim_hit.ceiling > 0)
+    ok("limits: ceiling counts only the window before the cut-off",
+       lim_hit.ceiling <= lim.peak.weight + 1)
+    rendered_lim = render_limits(lim_hit, color=False)
+    ok("limits render: ceiling section + percentages",
+       "MEASURED CEILING" in rendered_lim and "% " in rendered_lim.replace("%\n", "% "))
+    ok("limits render: no absolute threshold is claimed",
+       "does not publish" in rendered_lim or "No published formula" in rendered_lim)
+    ok("limits json: unit is stated", "weighted tokens" in limits_json(lim)["unit"])
+
+    lim_hermes = build_limits(hermes.load(db_path=env_db, days=30))
+    ok("limits: adapters without per-call timestamps say so, not zero",
+       bool(lim_hermes.unsupported) and lim_hermes.peak is None)
+    ok("limits: unsupported render explains why",
+       "per-call timestamps" in render_limits(lim_hermes, color=False))
+
+    r_lim = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
+                            "--db", cc_root, "--no-color"], capture_output=True, text=True)
+    ok("cli limits: end-to-end", r_lim.returncode == 0 and "PEAK WINDOW" in r_lim.stdout)
+    r_lim_j = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
+                              "--db", cc_root, "--json"], capture_output=True, text=True)
+    ok("cli limits --json: machine readable",
+       json.loads(r_lim_j.stdout)["peak"]["weight"] > 0)
+    r_hit_bad = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
+                                "--db", cc_root, "--hit", "yesterday"], capture_output=True, text=True)
+    ok("cli limits: a bad --hit is a clear error", r_hit_bad.returncode != 0
+       and "2026-08-20" in r_hit_bad.stderr)
+
+    # ------------------------------------------------- card without prices
+    print("share card on a subscription agent:")
+    from agentburn.share import share_svg, share_text  # noqa: E402
+
+    a_cc = analyze(snap_cc)
+    card = share_text(a_cc, lim)
+    ok("card: no prices → tokens and calls, not a dash",
+       card.splitlines()[1].startswith(fmt_tokens(a_cc.total.tokens)))
+    ok("card: 'where it burns' survives without dollars", "where it burns:" in card)
+    ok("card: peak window is on the card", "peak" in card and "weighted tokens" in card)
+    svg = share_svg(a_cc, lim)
+    ok("card svg: same window line", "peak" in svg and svg.startswith("<svg"))
+    ok("card svg: source bars rendered without prices", "where it burns" in svg)
+
+    # ------------------------------------------------- fix for claude code
+    print("fix (claude-code levers):")
+    from agentburn.fix import build_fixes, render_fixes  # noqa: E402
+
+    cc_home = tempfile.mkdtemp()
+    with open(os.path.join(cc_home, ".claude.json"), "w") as f:
+        json.dump({"mcpServers": {"used-server": {}, "idle-server": {}}}, f)
+    os.makedirs(os.path.join(cc_home, ".claude"), exist_ok=True)
+    with open(os.path.join(cc_home, ".claude", "CLAUDE.md"), "w") as f:
+        f.write("x" * 12_000)  # 3k tokens at 4 chars/token
+    old_home = os.environ.get("HOME")
+    os.environ["HOME"] = cc_home
+    try:
+        from agentburn.model import ActionEvent  # noqa: E402
+
+        snap_cc.events.append(ActionEvent(session_id="s", ts=now, name="mcp__used-server__do"))
+        patches = build_fixes("claude-code", cc_root, a_cc, None, snap_cc)
+    finally:
+        if old_home is not None:
+            os.environ["HOME"] = old_home
+    titles = " | ".join(p_.title for p_ in patches)
+    ok("fix: idle MCP server found, used one left alone",
+       "1 MCP server" in titles and "idle-server" in " ".join(p_.current for p_ in patches)
+       and "used-server" not in " ".join(p_.current for p_ in patches))
+    ok("fix: always-loaded memory files flagged with their size",
+       "memory files" in titles and "3,000 tokens" in titles)
+    rendered_fix = render_fixes("claude-code", patches, color=False)
+    ok("fix: claude-code patches render with a removal command",
+       "claude mcp remove idle-server" in rendered_fix)
+    ok("fix: still dry-run", "DRY-RUN" in rendered_fix and "no --apply" in rendered_fix.lower())
 
     print(f"\nAll {PASSED} checks passed.")
 
