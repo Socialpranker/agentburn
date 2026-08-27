@@ -35,6 +35,11 @@ METRICS = {
     "idle_heartbeat_share": ("heartbeat runs that did nothing", True),
     "failure_share": ("share of spend burned in failed runs", True),
     "cache_read_share": ("cache-read share of input volume", False),
+    # Subscription plans bill windows, not money, so the metrics that matter
+    # there are shaped like a window. Ratios only — nothing to inflate.
+    "window_peak_to_median": ("peak usage window ÷ your own median window", True),
+    "window_subagent_share": ("subagents' share of the peak window", True),
+    "output_share": ("output share of weighted volume", True),
 }
 
 # plausibility bounds for aggregation (drop obvious junk/gaming)
@@ -45,6 +50,9 @@ BOUNDS = {
     "idle_heartbeat_share": (0.0, 1.0),
     "failure_share": (0.0, 1.0),
     "cache_read_share": (0.0, 1.0),
+    "window_peak_to_median": (1.0, 100.0),
+    "window_subagent_share": (0.0, 1.0),
+    "output_share": (0.0, 1.0),
 }
 
 
@@ -57,7 +65,7 @@ def spend_band(monthly: float | None) -> str:
     return "$1000+"
 
 
-def build_metrics(analyses: list, breps: list) -> dict:
+def build_metrics(analyses: list, breps: list, limits: list = None) -> dict:
     """Anonymized-by-construction: shares, ratios and a coarse band only."""
     agents = sorted({a.agent.split(" ·")[0] for a in analyses})
     out = {"schema": SCHEMA, "agents": agents, "window_days": analyses[0].days if analyses else None}
@@ -86,24 +94,53 @@ def build_metrics(analyses: list, breps: list) -> dict:
 
     idle_n = idle_d = 0
     fail_cost = 0.0
+    fail_tokens = 0
     for r in breps:
         n, total, _ = r.idle_heartbeats
         idle_n += n
         idle_d += total
         if r.failure_cost[1]:
             fail_cost += r.failure_cost[1]
+        fail_tokens += r.failure_cost[2] or 0
 
     if oh_cli:
         out["overhead_cli"] = int(sum(oh_cli) / len(oh_cli))
     if oh_gw:
         out["overhead_gateway_max"] = int(max(oh_gw))
+    # Shares must survive an agent that records no prices, or a whole platform
+    # submits two fields and the index learns nothing from it.
+    night_tokens = sum(a.night.tokens for a in analyses)
+    total_tokens = sum(a.total.tokens for a in analyses)
     if cost_total > 0:
         out["night_share"] = round(night / cost_total, 3)
         out["failure_share"] = round(min(1.0, fail_cost / cost_total), 3)
+    elif total_tokens > 0:
+        out["night_share"] = round(night_tokens / total_tokens, 3)
+        if fail_tokens:
+            out["failure_share"] = round(min(1.0, fail_tokens / total_tokens), 3)
     if idle_d > 0:
         out["idle_heartbeat_share"] = round(idle_n / idle_d, 3)
     if inputs > 0:
         out["cache_read_share"] = round(cache_read / inputs, 3)
+    for rep in limits or []:
+        if not rep or not rep.peak or rep.typical <= 0:
+            continue
+        out["window_peak_to_median"] = round(rep.peak.weight / rep.typical, 2)
+        sub = dict(rep.peak_by_source).get("subagent")
+        if sub is not None:
+            out["window_subagent_share"] = round(sub, 3)
+        share = dict(rep.mix).get("output")
+        if share is not None:
+            out["output_share"] = round(share, 3)
+        break  # one window profile per submission; multi-agent stays comparable
+
+    # On a heavily cached agent the uncached figure is measurement noise (single
+    # digits), not efficiency — comparing it against setups without caching
+    # would rank people by their provider's cache policy.
+    if out.get("cache_read_share", 0) >= 0.9:
+        out.pop("overhead_cli", None)
+        out.pop("overhead_gateway_max", None)
+
     out["spend_band"] = spend_band(monthly if monthly_known else None)
     return out
 

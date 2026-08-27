@@ -616,6 +616,25 @@ def main():
     r_nomodel = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
                                 "--db", env_db, "--llm", f"http://127.0.0.1:{port}/v1"],
                                capture_output=True, text=True, encoding="utf-8", errors="replace")
+    # Paths and project names used to survive inside prose: redact walked known
+    # keys, while observations render the same path into a sentence.
+    from agentburn import llm  # noqa: E402
+
+    leaky = {
+        "report": {"subagent_rollups": [{"title": "Thoforge/5df33520"}],
+                   "recommendations": ["'Thoforge/5df33520' compacted 4× — trim its context"]},
+        "why": {"rereads": [{"session": "abc", "arg": "/Users/someone/secret/plan.md", "count": 4}],
+                "observations": ["`/Users/someone/secret/plan.md` was fetched 13× by Read"],
+                "compactions": {"total": 4, "worst": [["Thoforge/5df33520", 4]]}},
+    }
+    cleaned = json.dumps(llm.redact(leaky), ensure_ascii=False)
+    ok("redact: no absolute path survives, not even inside prose",
+       "/Users/someone" not in cleaned and "secret" not in cleaned, cleaned[:160])
+    ok("redact: a session title is aliased everywhere it appears",
+       "Thoforge/5df33520" not in cleaned and "session-1" in cleaned, cleaned[:160])
+    ok("redact: the finding is still readable after scrubbing",
+       "fetched 13" in cleaned and "plan.md" in cleaned)
+
     ok("explain: missing --model is a clear error", r_nomodel.returncode == 2 and "--model" in r_nomodel.stderr)
     srv.shutdown()
 
@@ -775,7 +794,7 @@ def main():
     ok("cli drift --json works end-to-end", dj["rows"] and dj["advice"])
 
     print("burn index (ход 3):")
-    from agentburn.burnindex import (build_metrics, rank_against, render_rank,
+    from agentburn.burnindex import (BOUNDS, build_metrics, rank_against, render_rank,
                                      spend_band, submit_url)
     sys.path.insert(0, os.path.join(root, "tools"))
     from aggregate_burn_index import aggregate, extract_submissions
@@ -994,6 +1013,28 @@ def main():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+    # A subscription agent used to submit two fields, one of them noise: night
+    # and failure shares were dollar-only, and the uncached overhead of a fully
+    # cached agent is single digits — which the aggregator then dropped as junk.
+    from agentburn.behavior import analyze_behavior as _ab  # noqa: E402
+    from agentburn.burnindex import BOUNDS, build_metrics  # noqa: E402
+
+    sub_metrics = build_metrics([analyze(snap_cc)], [_ab(snap_cc)], [lim])
+    ok("index: night share falls back to tokens when there are no prices",
+       0.0 <= sub_metrics.get("night_share", -1) <= 1.0)
+    ok("index: window profile submitted (peak/median, subagent share, output share)",
+       sub_metrics["window_peak_to_median"] >= 1.0
+       and "window_subagent_share" in sub_metrics
+       and "output_share" in sub_metrics)
+    ok("index: peak/median is within the aggregator's bounds",
+       BOUNDS["window_peak_to_median"][0] <= sub_metrics["window_peak_to_median"]
+       <= BOUNDS["window_peak_to_median"][1])
+    ok("index: noise overhead is not submitted from a fully cached agent",
+       "overhead_cli" not in sub_metrics or sub_metrics["cache_read_share"] < 0.9)
+    ok("index: still no titles, paths or raw volumes",
+       not any(isinstance(v, str) and ("/" in v or "\\" in v)
+               for k, v in sub_metrics.items() if k != "agents"))
 
     # ------------------------------------------------- card without prices
     print("share card on a subscription agent:")

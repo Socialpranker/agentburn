@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -40,31 +41,69 @@ def is_local(base_url: str) -> bool:
     return host in ("localhost", "127.0.0.1", "::1", "0.0.0.0")
 
 
+# Absolute paths in any shape: /Users/…, ~/…, C:\Users\…
+_ABS_PATH = re.compile(r"(?:[A-Za-z]:[\\/]|~[\\/]|/)[^\s\"'`,;)\]]+")
+
+
+def _basename(match) -> str:
+    """A path shrunk to its last component — enough to reason about, not to locate."""
+    raw = match.group(0).replace("\\", "/").rstrip("/")
+    return raw.rsplit("/", 1)[-1][:40] or "file"
+
+
 def redact(payload: dict) -> dict:
-    """Strip identifying bits for remote endpoints: titles → session-N, paths → basenames."""
+    """Strip identifying bits for remote endpoints: titles → session-N, paths → basenames.
+
+    Applied to EVERY string in the payload, not to a list of known keys. The
+    key-by-key version leaked the moment a finding was rendered as prose:
+    observations carry the same path inside a sentence, and a project name shows
+    up in a compaction note. One pass over all strings closes that class.
+    """
     p = json.loads(json.dumps(payload))  # deep copy
     names = {}
 
     def alias(title: str) -> str:
+        title = str(title or "")
+        if not title:
+            return ""
         if title not in names:
             names[title] = f"session-{len(names) + 1}"
         return names[title]
 
+    # Phase 1: mint aliases for every identifier the payload names explicitly,
+    # so the same string is replaced wherever else it appears — including prose.
     rep = p.get("report") or {}
-    for r in rep.get("subagent_rollups") or []:
-        r["title"] = alias(r.get("title", ""))
     why = p.get("why") or {}
-    for r in why.get("rereads") or []:
-        r["session"] = alias(r.get("session", ""))
-        if r.get("arg"):
-            r["arg"] = str(r["arg"]).replace("\\", "/").rsplit("/", 1)[-1][:40]
-    for s in why.get("storms") or []:
-        s["session"] = alias(s.get("session", ""))
-    fc = why.get("failure_cost") or {}
-    fc["examples"] = [alias(e) for e in fc.get("examples") or []]
-    for r in why.get("reasoning_heavy") or []:
-        r["session"] = alias(r.get("session", ""))
-    return p
+    for r in rep.get("subagent_rollups") or []:
+        alias(r.get("title"))
+    for key, field in (("rereads", "session"), ("storms", "session"),
+                       ("reasoning_heavy", "session"), ("cron_runs", "job")):
+        for r in why.get(key) or []:
+            alias(r.get(field))
+    for e in (why.get("failure_cost") or {}).get("examples") or []:
+        alias(e)
+    for title, _ in (why.get("compactions") or {}).get("worst") or []:
+        alias(title)
+
+    # Longest first: a title that contains another must not be half-replaced.
+    ordered = sorted(names, key=len, reverse=True)
+
+    def scrub(text: str) -> str:
+        for original in ordered:
+            if original and original in text:
+                text = text.replace(original, names[original])
+        return _ABS_PATH.sub(_basename, text)
+
+    def walk(node):
+        if isinstance(node, dict):
+            return {k: walk(v) for k, v in node.items()}
+        if isinstance(node, list):
+            return [walk(v) for v in node]
+        if isinstance(node, str):
+            return scrub(node)
+        return node
+
+    return walk(p)
 
 
 def compact(payload: dict, limit: int = 14_000) -> str:

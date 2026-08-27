@@ -258,7 +258,10 @@ def main(argv=None) -> int:
             snaps = [load(n) for n in found]
             analyses = [analyze(s, night_window=args.night) for s in snaps]
             breps = [analyze_behavior(s) for s in snaps]
-            metrics = build_metrics(analyses, breps)
+            from .limits import build_limits
+
+            lims = [build_limits(sn) if sn.usage_cells else None for sn in snaps]
+            metrics = build_metrics(analyses, breps, lims)
             if args.submit:
                 import json as _json
 
