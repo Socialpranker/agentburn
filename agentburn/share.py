@@ -35,6 +35,11 @@ def overhead_headline(a: Analysis) -> str:
     tail = f" — {ref}" if ref else ""
 
     cached = a.cache_share.get(src)
+    if cached is not None and cached >= 0.9 and uncached < 100:
+        # Comparing single-digit noise against an 8k baseline produces a
+        # meaningless brag ("100% below the norm!"). Report what is carried.
+        return (f"{label} carries {total:,} tokens per call, {cached:.0%} of it served "
+                f"from cache — only {uncached:,} re-sent at full price")
     if cached is not None and cached >= 0.5:
         # The honest headline: the resend tax is mostly cached away.
         return (f"{label} re-sends {uncached:,} uncached tokens with EVERY call{tail}"
@@ -42,36 +47,83 @@ def overhead_headline(a: Analysis) -> str:
     return f"{label} re-sends {uncached:,} tokens with EVERY call{tail}"
 
 
-def share_text(a: Analysis) -> str:
+def source_shares(a: Analysis) -> list:
+    """[(label, share, value)] — falls back to tokens when no prices exist.
+
+    A dollars-only version of this printed an empty card on subscription agents,
+    which is exactly the class of bug this project keeps re-finding.
+    """
+    cost_total = a.total.cost or 0.0
+    priced = cost_total > 0
+    out = []
+    for src, b in list(a.by_source.items())[:4]:
+        if (b.cost > 0) if priced else (b.tokens > 0):
+            share = (b.cost / cost_total) if priced else (b.tokens / max(a.total.tokens, 1))
+            value = (
+                fmt_money(b.cost, a.cost_basis) if priced else f"{fmt_tokens(b.tokens)} tokens"
+            )
+            out.append((src.replace("gateway:", ""), share, value))
+    return out
+
+
+def night_line(a: Analysis) -> str:
+    """The overnight line, in dollars when they exist and tokens when they don't."""
+    if a.night.sessions <= 0:
+        return ""
+    cost_total = a.total.cost or 0.0
+    if cost_total > 0:
+        share, amount = a.night.cost / cost_total, fmt_money(a.night.cost, a.cost_basis)
+    elif a.total.tokens > 0:
+        share, amount = a.night.tokens / a.total.tokens, f"{fmt_tokens(a.night.tokens)} tokens"
+    else:
+        return ""
+    return (
+        f"🌙 while I slept ({a.night_window[0]:02d}–{a.night_window[1]:02d}): "
+        f"{amount} — {share:.0%} of everything"
+    )
+
+
+def window_line(lim) -> str:
+    """Peak usage window — the number that matters on a subscription."""
+    if not lim or not getattr(lim, "peak", None) or lim.peak.weight <= 0:
+        return ""
+    txt = f"⏳ my peak {lim.window_hours:g}h window: {fmt_tokens(lim.peak.weight)} weighted tokens"
+    if lim.typical > 0:
+        txt += f" — {lim.peak.weight / lim.typical:.1f}× my own median window"
+    return txt
+
+
+def share_text(a: Analysis, lim=None) -> str:
     """One clear thought per line, no nested parentheses, no jargon."""
     basis = a.cost_basis
     days = f"last {a.days}d" if a.days else "all time"
     lines = [f"🔥 my {a.agent} agent · {days}"]
 
-    total = fmt_money(a.total.cost if a.total.cost_known else None, basis)
-    pace = (
-        f" → {fmt_money(a.monthly_projection, basis)}/mo pace"
-        if a.monthly_projection is not None
-        else ""
-    )
-    lines.append(f"{total}{pace} · {fmt_tokens(a.total.tokens)} tokens")
-
-    cost_total = a.total.cost or 0.0
-    if cost_total > 0 and a.by_source:
-        shares = [
-            f"{src.replace('gateway:', '')} {b.cost / cost_total:.0%}"
-            for src, b in list(a.by_source.items())[:4]
-            if b.cost > 0
-        ]
-        if shares:
-            lines.append("where it burns: " + " · ".join(shares))
-
-    if a.night.sessions > 0 and cost_total > 0:
-        share = a.night.cost / cost_total
-        lines.append(
-            f"🌙 while I slept ({a.night_window[0]:02d}–{a.night_window[1]:02d}): "
-            f"{fmt_money(a.night.cost, basis)} — {share:.0%} of everything"
+    if a.total.cost_known:
+        pace = (
+            f" → {fmt_money(a.monthly_projection, basis)}/mo pace"
+            if a.monthly_projection is not None
+            else ""
         )
+        lines.append(
+            f"{fmt_money(a.total.cost, basis)}{pace} · {fmt_tokens(a.total.tokens)} tokens"
+        )
+    else:
+        # No prices: a leading "–" reads like a missing number, not like a
+        # subscription. Say what is actually known.
+        lines.append(f"{fmt_tokens(a.total.tokens)} tokens · {a.total.api_calls:,} API calls")
+
+    shares = [f"{label} {share:.0%}" for label, share, _ in source_shares(a)]
+    if shares:
+        lines.append("where it burns: " + " · ".join(shares))
+
+    win = window_line(lim)
+    if win:
+        lines.append(win)
+
+    night = night_line(a)
+    if night:
+        lines.append(night)
 
     overhead_line = overhead_headline(a)
     if overhead_line:
@@ -102,7 +154,7 @@ def _source_color(src: str) -> str:
     return "#7df0a8"
 
 
-def share_svg(a: Analysis, width: int = 640) -> str:
+def share_svg(a: Analysis, lim=None, width: int = 640) -> str:
     """Dark share card (X/OG friendly). Same anonymity rules as share_text.
 
     Design: brand row → big cost + pace → 'where it burns' bars (color = source
@@ -111,7 +163,6 @@ def share_svg(a: Analysis, width: int = 640) -> str:
     """
     esc = lambda s: str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     basis = a.cost_basis
-    cost_total = a.total.cost or 0.0
     days = f"last {a.days} days" if a.days else "all time"
     t = lambda x, y, size, fill, s, anchor="start", weight=None: (
         f'<text x="{x}" y="{y}" font-size="{size}" fill="{fill}" font-family="{F}"'
@@ -133,35 +184,31 @@ def share_svg(a: Analysis, width: int = 640) -> str:
             t(612, 104, 14, "#f5d76e", f"≈ {esc(fmt_money(a.monthly_projection, basis))}/mo at this pace",
               anchor="end", weight="500")
         )
-    parts.append(f'<rect x="28" y="126" width="584" height="1" fill="#242a31"/>')
+    parts.append('<rect x="28" y="126" width="584" height="1" fill="#242a31"/>')
 
     y = 156
     parts.append(t(28, y, 12, "#8a949e", "where it burns"))
     y += 14
-    shown = [
-        (src, b) for src, b in list(a.by_source.items())[:4]
-        if (b.cost > 0 if cost_total > 0 else b.tokens > 0)
-    ]
-    for src, b in shown:
-        share = (b.cost / cost_total) if cost_total > 0 else (b.tokens / max(a.total.tokens, 1))
-        label = src.replace("gateway:", "")
+    for label, share, value in source_shares(a):
         bar_w = max(3, int(340 * share))
-        val = f"{share:.0%} · {fmt_money(b.cost, basis)}" if cost_total > 0 else f"{share:.0%} · {fmt_tokens(b.tokens)}"
         parts.append(t(28, y + 10, 14, "#e6e9ec", esc(label[:14])))
         parts.append(f'<rect x="140" y="{y + 1}" width="340" height="10" rx="5" fill="#1b2026"/>')
-        parts.append(f'<rect x="140" y="{y + 1}" width="{bar_w}" height="10" rx="5" fill="{_source_color(src)}"/>')
-        parts.append(t(612, y + 10, 13, "#8a949e", esc(val), anchor="end"))
+        parts.append(f'<rect x="140" y="{y + 1}" width="{bar_w}" height="10" rx="5" fill="{_source_color(label)}"/>')
+        parts.append(t(612, y + 10, 13, "#8a949e", esc(f"{share:.0%} · {value}"), anchor="end"))
         y += 30
 
-    if a.night.sessions > 0 and cost_total > 0:
+    win = window_line(lim)
+    if win:
         y += 8
-        share = a.night.cost / cost_total
+        parts.append(f'<rect x="28" y="{y}" width="584" height="36" rx="10" fill="#c89bf7" opacity="0.12"/>')
+        parts.append(t(44, y + 23, 14, "#c89bf7", esc(win), weight="500"))
+        y += 36
+
+    night = night_line(a)
+    if night:
+        y += 8
         parts.append(f'<rect x="28" y="{y}" width="584" height="36" rx="10" fill="#f7775a" opacity="0.12"/>')
-        parts.append(
-            t(44, y + 23, 14, "#f7a08a",
-              f"🌙 while I slept ({a.night_window[0]:02d}–{a.night_window[1]:02d}): "
-              f"{esc(fmt_money(a.night.cost, basis))} — {share:.0%} of everything", weight="500")
-        )
+        parts.append(t(44, y + 23, 14, "#f7a08a", esc(night), weight="500"))
         y += 36
 
     overhead_line = overhead_headline(a)
