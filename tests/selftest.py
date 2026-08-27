@@ -928,6 +928,73 @@ def main():
     ok("cli limits: a bad --hit is a clear error", r_hit_bad.returncode != 0
        and "2026-08-20" in r_hit_bad.stderr)
 
+
+    # ----------------------------------------------------------------- cache
+    # Parsing 3 GB of transcripts costs ~2 minutes; every command paid it again.
+    # The cache is only allowed to be fast if it is also identical.
+    print("parse cache:")
+    from agentburn import cache  # noqa: E402
+
+    cache_home = tempfile.mkdtemp()
+    saved_home = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE")}
+    os.environ["HOME"] = os.environ["USERPROFILE"] = cache_home
+    try:
+        cold = cc.load(db_path=cc_root, days=30, now=now)
+        warm = cc.load(db_path=cc_root, days=30, now=now)
+
+        def digest(sn):
+            return (
+                sorted((x.id, x.api_calls, x.total_tokens, x.started_at, x.ended_at, x.model)
+                       for x in sn.sessions),
+                sorted((c.start, c.source, c.model, c.calls, c.input_tokens, c.output_tokens,
+                        c.cache_read_tokens, c.cache_write_tokens) for c in sn.usage_cells),
+                [(e.name, e.ts, e.ok, e.tokens) for e in sn.events],
+                sn.compactions,
+            )
+
+        ok("cache: a warm load is identical to a cold one", digest(cold) == digest(warm))
+        entries = [e for e in os.listdir(cache.root("claude-code")) if e.endswith(".json")]
+        ok("cache: one entry per transcript", len(entries) == 2, str(entries))
+
+        # A grown transcript must invalidate its own entry and nothing else.
+        main_path = os.path.join(proj, "11111111-1111-4111-8111-111111111111.jsonl")
+        with open(main_path, "a", encoding="utf-8") as f:
+            f.write(turn(now - 600, "claude-sonnet-5", inp=777) + "\n")
+        grown = cc.load(db_path=cc_root, days=30, now=now)
+        ok("cache: a changed file is re-parsed, not served stale",
+           sum(x.total_tokens for x in grown.sessions)
+           == sum(x.total_tokens for x in cold.sessions) + 777)
+
+        stale = cache.get("claude-code", main_path, {"mtime_ns": 1, "size": 1})
+        ok("cache: a mismatched stamp is a miss", stale is None)
+        ok("cache: unreadable entry is a miss, not a crash",
+           cache.get("claude-code", os.path.join(cc_root, "nope.jsonl"), {"a": 1}) is None)
+
+        os.environ[cache.ENV_OFF] = "1"
+        try:
+            off = cc.load(db_path=cc_root, days=30, now=now)
+            ok("cache: AGENTBURN_NO_CACHE reads the transcripts directly",
+               digest(off) == digest(grown))
+        finally:
+            del os.environ[cache.ENV_OFF]
+
+        freed = cache.clear("claude-code")
+        ok("cache: clear removes the entries and reports bytes",
+           freed > 0 and not os.path.isdir(cache.root("claude-code")))
+
+        # The sweep marker must not make an entry look fresh, and a swept cache
+        # must still rebuild itself.
+        cc.load(db_path=cc_root, days=30, now=now)
+        cache.sweep("claude-code")
+        ok("cache: sweep keeps entries whose transcript still exists",
+           len([e for e in os.listdir(cache.root("claude-code")) if e.endswith(".json")]) == 2)
+    finally:
+        for k, v in saved_home.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
     # ------------------------------------------------- card without prices
     print("share card on a subscription agent:")
     from agentburn.share import share_svg, share_text  # noqa: E402

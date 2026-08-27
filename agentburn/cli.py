@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import __version__
@@ -66,6 +67,7 @@ RECIPES = """examples:
   agentburn explain --model llama3.1       plain-language interpretation via LOCAL llm (ollama)
   agentburn doctor                   accounting health + ready-to-paste upstream bug report
   agentburn --budget-night 5 --fail-over   cron guard: exit 1 when night burn exceeds $5/mo
+  agentburn --clear-cache            drop the parse cache (~/.agentburn/cache) and exit
 """
 
 
@@ -121,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="sentinel: warn when the overnight share exceeds this per month")
     ap.add_argument("--fail-over", action="store_true",
                     help="exit with code 1 when a budget is breached (for cron/CI alerts)")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="re-parse every transcript instead of reusing the local parse cache "
+                         "(~/.agentburn/cache; also AGENTBURN_NO_CACHE=1)")
+    ap.add_argument("--clear-cache", action="store_true",
+                    help="delete the local parse cache and exit")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--no-color", action="store_true")
     ap.add_argument("--version", action="version", version=f"agentburn {__version__}")
@@ -192,8 +199,6 @@ def _utf8_stdio() -> None:
 
 
 def _ansi_ok() -> bool:
-    import os
-
     if os.name != "nt":
         return True
     return bool(os.environ.get("WT_SESSION") or os.environ.get("ANSICON") or os.environ.get("TERM"))
@@ -202,6 +207,16 @@ def _ansi_ok() -> bool:
 def main(argv=None) -> int:
     _utf8_stdio()
     args = build_parser().parse_args(argv)
+    from . import cache
+
+    if args.clear_cache:
+        freed = cache.clear()
+        print(f"agentburn: parse cache cleared ({freed / 1e6:.1f} MB freed).")
+        return 0
+    if args.no_cache:
+        # The adapters read this through the same env switch users have, so one
+        # code path covers both --no-cache and AGENTBURN_NO_CACHE=1.
+        os.environ[cache.ENV_OFF] = "1"
     if args.command == "mcp":
         from .mcp import serve
 
@@ -442,8 +457,6 @@ def main(argv=None) -> int:
 
 def _next_hints(args, color: bool, subscription: bool = False) -> None:
     """Guided journey: tell the user what this tool can do next — contextually."""
-    import os
-
     from . import baseline
 
     dim = (lambda s: f"\033[2m{s}\033[0m") if color else (lambda s: s)

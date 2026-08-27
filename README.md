@@ -127,9 +127,23 @@ Token trackers quietly disagree with each other (2–91× in public issue thread
 - Sessions with messages but **zero recorded tokens** (known accounting gaps, e.g. [hermes-agent #12023](https://github.com/NousResearch/hermes-agent/issues/12023)) are detected: totals become an explicit **lower bound**, and fixing the accounting becomes recommendation #1.
 - Result weights on agents that don't record them are labeled *estimates*, and only ever used to rank findings against each other.
 
+## Speed
+
+Transcripts are append-only, so they are parsed once. Each file's parse is cached under its size and mtime in `~/.agentburn/cache`, and a run reuses every file that hasn't changed:
+
+| 30 days over 3.1 GB of Claude Code logs | |
+|---|---|
+| first run (parses everything, writes the cache) | ~190 s |
+| every run after that | **~3 s** |
+| cache size | 29 MB (0.9% of the logs) |
+
+A file that grew is re-parsed and re-cached; nothing else is touched. `--no-cache` (or `AGENTBURN_NO_CACHE=1`) forces a full re-parse, `--clear-cache` deletes it. The cache is derived data — deleting it costs time, nothing else.
+
 ## Privacy
 
 Everything runs locally and reads your logs **read-only**. No network calls, no telemetry, no accounts. The report is yours. The only commands that touch the network say so: `drift` GETs a public trends file, `--submit` opens a prefilled issue *you* review and send.
+
+The parse cache in `~/.agentburn/cache` (mode 0700) holds the same tool names and truncated argument keys the reports show, derived from logs already on this machine — never message content. `--clear-cache` removes it.
 
 ## Why this exists
 

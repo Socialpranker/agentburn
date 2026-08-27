@@ -24,6 +24,7 @@ import re
 import time
 from typing import Optional
 
+from .. import cache
 from ..model import BUCKET_SECONDS, ActionEvent, SessionRec, Snapshot, UsageCell
 from .hermes import salient_arg
 
@@ -34,6 +35,14 @@ UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 # labeled an estimate — same footing as the sampled input composition, and only
 # ever used to rank findings against each other, never reported as a total.
 CHARS_PER_TOKEN = 4
+
+# Per-file guard on behavioural events: one runaway transcript should not be
+# able to fill memory. Files hitting it are counted and reported, not hidden.
+MAX_EVENTS_PER_FILE = 80_000
+
+# Claude Code stamps turns it produced itself (interrupts, tool errors) with
+# this in place of a model name. Not a model — do not report it as one.
+SYNTHETIC_MODEL = "<synthetic>"
 
 
 def _result_weight(content) -> int:
@@ -78,8 +87,12 @@ def _parse_ts(v) -> Optional[float]:
     return None
 
 
-def _scan_file(path: str, sid: str, events: list, cells: dict):
-    """→ (first_ts, last_ts, api_calls, usage sums, model, lines, compactions).
+def _scan_file(path: str) -> dict:
+    """Parse one transcript into a cacheable dict of plain values.
+
+    Returns first/last timestamps, api_calls, usage sums, model, line count,
+    compactions, plus compact rows for events and per-bucket usage. Plain lists
+    rather than dataclasses, because this is exactly what gets cached.
 
     Also appends ActionEvents (tool_use with salient arg; tool_result error
     flags linked by tool_use_id), fills `cells` — (bucket, model) → usage, the
@@ -94,7 +107,10 @@ def _scan_file(path: str, sid: str, events: list, cells: dict):
     model = None
     lines = 0
     compactions = 0
+    no_ts = 0
     id_to_name = {}
+    events: list = []
+    cells: dict = {}
     with open(path, "r", encoding="utf-8", errors="replace") as f:
         for raw in f:
             raw = raw.strip()
@@ -127,7 +143,11 @@ def _scan_file(path: str, sid: str, events: list, cells: dict):
                 cw += w_
                 cr += r_
                 if ts:
-                    key = (int(ts // BUCKET_SECONDS) * BUCKET_SECONDS, msg.get("model"))
+                    m_ = msg.get("model")
+                    key = (
+                        int(ts // BUCKET_SECONDS) * BUCKET_SECONDS,
+                        None if m_ == SYNTHETIC_MODEL else m_,
+                    )
                     c = cells.get(key)
                     if c is None:
                         cells[key] = [1, i_, o_, r_, w_]
@@ -137,10 +157,14 @@ def _scan_file(path: str, sid: str, events: list, cells: dict):
                         c[2] += o_
                         c[3] += r_
                         c[4] += w_
-            if msg.get("model"):
+                else:
+                    # No timestamp = no window. Counted so the report can say so
+                    # instead of quietly under-reporting every window.
+                    no_ts += 1
+            if msg.get("model") and msg["model"] != SYNTHETIC_MODEL:
                 model = msg["model"]
             content = msg.get("content")
-            if isinstance(content, list) and len(events) < 80_000:
+            if isinstance(content, list) and len(events) < MAX_EVENTS_PER_FILE:
                 for item in content:
                     if not isinstance(item, dict):
                         continue
@@ -148,25 +172,29 @@ def _scan_file(path: str, sid: str, events: list, cells: dict):
                         if item.get("id"):
                             id_to_name[item["id"]] = item["name"]
                         events.append(
-                            ActionEvent(
-                                session_id=sid,
-                                ts=ts,
-                                name=str(item["name"])[:40],
-                                arg_key=salient_arg(item.get("input")),
-                            )
+                            [ts, str(item["name"])[:40], salient_arg(item.get("input")), None, None]
                         )
                     elif item.get("type") == "tool_result":
                         name = id_to_name.get(item.get("tool_use_id"), "tool")
                         events.append(
-                            ActionEvent(
-                                session_id=sid,
-                                ts=ts,
-                                name=str(name)[:40],
-                                ok=not bool(item.get("is_error")),
-                                tokens=_result_weight(item.get("content")),
-                            )
+                            [ts, str(name)[:40], None,
+                             not bool(item.get("is_error")), _result_weight(item.get("content"))]
                         )
-    return first, last, calls, inp, out, cr, cw, model, lines, compactions
+    return {
+        "first": first,
+        "last": last,
+        "calls": calls,
+        "inp": inp,
+        "out": out,
+        "cr": cr,
+        "cw": cw,
+        "model": model,
+        "lines": lines,
+        "compactions": compactions,
+        "no_ts": no_ts,
+        "events": events,
+        "cells": [[b, m] + v for (b, m), v in cells.items()],
+    }
 
 
 def load(
@@ -193,24 +221,37 @@ def load(
     ]
     subs = glob.glob(os.path.join(root, "*", "*", "subagents", "*.jsonl"))
 
+    stats = {"parsed": 0, "cached": 0, "no_ts": 0, "truncated": 0}
+
     def consider(path: str, source: str, parent: Optional[str], title: str):
         sid = os.path.basename(path)[:-6]
-        local_events: list = []
-        local_cells: dict = {}
         try:
             if days and os.path.getmtime(path) < since:
                 return
-            first, last, calls, inp, out, cr, cw, model, lines, compactions = _scan_file(
-                path, sid, local_events, local_cells
-            )
+            key = cache.stamp(path)
+            scan = cache.get("claude-code", path, key)
+            if scan is None:
+                scan = _scan_file(path)
+                cache.put("claude-code", path, key, scan)
+                stats["parsed"] += 1
+            else:
+                stats["cached"] += 1
         except OSError:
             return
-        if lines == 0:
+        if scan["lines"] == 0:
             return
+        last = scan["last"]
         if days and last is not None and last < since:
             return
-        snap.events.extend(local_events)
-        for (bucket, cell_model), v in local_cells.items():
+
+        stats["no_ts"] += scan.get("no_ts", 0)
+        if len(scan["events"]) >= MAX_EVENTS_PER_FILE:
+            stats["truncated"] += 1
+        for ts, name, arg_key, ok, tokens in scan["events"]:
+            snap.events.append(
+                ActionEvent(session_id=sid, ts=ts, name=name, arg_key=arg_key, ok=ok, tokens=tokens)
+            )
+        for bucket, cell_model, calls_, i_, o_, r_, w_ in scan["cells"]:
             if days and bucket < since:
                 continue  # a long-lived file can carry buckets from before the window
             snap.usage_cells.append(
@@ -218,35 +259,37 @@ def load(
                     start=bucket,
                     source=source,
                     model=cell_model,
-                    calls=v[0],
-                    input_tokens=v[1],
-                    output_tokens=v[2],
-                    cache_read_tokens=v[3],
-                    cache_write_tokens=v[4],
+                    calls=calls_,
+                    input_tokens=i_,
+                    output_tokens=o_,
+                    cache_read_tokens=r_,
+                    cache_write_tokens=w_,
                 )
             )
-        if compactions:
-            snap.compactions[sid] = compactions
+        if scan["compactions"]:
+            snap.compactions[sid] = scan["compactions"]
         snap.sessions.append(
             SessionRec(
                 id=sid,
                 source=source,
-                model=model,
-                started_at=first,
+                model=scan["model"],
+                started_at=scan["first"],
                 ended_at=last,
                 parent_id=parent,
                 title=title[:80],
-                api_calls=calls,
-                input_tokens=inp,
-                output_tokens=out,
-                cache_read_tokens=cr,
-                cache_write_tokens=cw,
+                api_calls=scan["calls"],
+                input_tokens=scan["inp"],
+                output_tokens=scan["out"],
+                cache_read_tokens=scan["cr"],
+                cache_write_tokens=scan["cw"],
                 reasoning_tokens=0,
                 cost_usd=None,
                 cost_basis="unknown",
-                message_count=lines,
+                message_count=scan["lines"],
             )
         )
+
+    cache.maybe_sweep("claude-code")
 
     for p in mains:
         project = os.path.basename(os.path.dirname(p)).strip("-").split("-")[-1] or "project"
@@ -270,4 +313,17 @@ def load(
         "Claude Code does not record costs locally; subscription usage has no honest per-token "
         "price — showing tokens, not dollars."
     )
+    total_calls = sum(s_.api_calls for s_ in snap.sessions)
+    if stats["no_ts"] and total_calls and stats["no_ts"] / total_calls >= 0.005:
+        # Calls without a timestamp are counted in totals but cannot be placed
+        # in a window — say so rather than let `limits` under-report silently.
+        snap.warnings.append(
+            f"{stats['no_ts']:,} of {total_calls:,} API calls carry no timestamp: they are in the "
+            "totals but not in any window, so `agentburn limits` is a lower bound."
+        )
+    if stats["truncated"]:
+        snap.warnings.append(
+            f"{stats['truncated']} transcript(s) hit the {MAX_EVENTS_PER_FILE:,}-event per-file cap; "
+            "`agentburn why` sees the beginning of those sessions only."
+        )
     return snap
