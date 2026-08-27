@@ -114,6 +114,10 @@ def _call(name: str, args: dict) -> str:
 
 
 def serve(stdin=None, stdout=None) -> None:
+    from .cli import _utf8_stdio
+
+    # JSON-RPC frames are UTF-8 by spec; a cp1252 console would corrupt them.
+    _utf8_stdio()
     stdin = stdin or sys.stdin
     stdout = stdout or sys.stdout
 

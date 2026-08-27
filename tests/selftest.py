@@ -395,6 +395,15 @@ def main():
                         "--budget-night", "5", "--fail-over", "--no-color"],
                        capture_output=True, text=True)
     ok("sentinel: breach printed and exit 1", r.returncode == 1 and "exceeds budget" in r.stdout)
+
+    # A cp1252 console (the Windows default) could not encode the emoji in the
+    # report header, so the tool died on its own first line. Pin that shut.
+    r_cp = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
+                           "--db", env_db, "--no-color"],
+                          capture_output=True, text=True, errors="replace",
+                          env=dict(os.environ, PYTHONIOENCODING="cp1252"))
+    ok("cli survives a non-UTF-8 console", r_cp.returncode == 0
+       and "agentburn" in r_cp.stdout, r_cp.stderr[-200:])
     r2 = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
                          "--budget-month", "99999", "--fail-over"],
                         capture_output=True, text=True)

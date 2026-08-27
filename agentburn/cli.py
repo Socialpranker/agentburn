@@ -177,6 +177,20 @@ def sentinel_breaches(a, args) -> list:
     return out
 
 
+def _utf8_stdio() -> None:
+    """Never die on our own output.
+
+    A Windows console defaults to cp1252, which cannot encode the emoji in
+    every report header — so the very first line raised UnicodeEncodeError and
+    the tool was unusable there despite being advertised as cross-platform.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass  # non-reconfigurable stream (a pipe wrapper, an old Python)
+
+
 def _ansi_ok() -> bool:
     import os
 
@@ -186,6 +200,7 @@ def _ansi_ok() -> bool:
 
 
 def main(argv=None) -> int:
+    _utf8_stdio()
     args = build_parser().parse_args(argv)
     if args.command == "mcp":
         from .mcp import serve
