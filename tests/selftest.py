@@ -1018,7 +1018,6 @@ def main():
     # and failure shares were dollar-only, and the uncached overhead of a fully
     # cached agent is single digits — which the aggregator then dropped as junk.
     from agentburn.behavior import analyze_behavior as _ab  # noqa: E402
-    from agentburn.burnindex import BOUNDS, build_metrics  # noqa: E402
 
     sub_metrics = build_metrics([analyze(snap_cc)], [_ab(snap_cc)], [lim])
     ok("index: night share falls back to tokens when there are no prices",
