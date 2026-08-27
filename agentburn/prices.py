@@ -57,6 +57,21 @@ def _with_author(m: str) -> str:
     return f"{author}/{m}" if author else m
 
 
+def match_key(slug: str) -> str:
+    """Canonical identity of a model across naming conventions.
+
+    Agents, providers and rankings order the parts differently
+    ("claude-opus-4.8", "anthropic/claude-4.8-opus-20260528") and local CLIs
+    drop the author entirely. Author plus the sorted set of name tokens makes
+    all of those one key — which is what joining your usage against a public
+    ranking needs.
+    """
+    m = _with_author(_norm(slug))
+    author, _, name = m.partition("/")
+    tokens = sorted(t for t in re.split(r"[-._]", name) if t)
+    return f"{author}/{'-'.join(tokens)}" if author else "-".join(tokens)
+
+
 def lookup(model: str) -> Optional[tuple]:
     """Price for a model slug; tolerant to date suffixes, reorderings and bare
     ids (claude-4.6-opus-20260205 → anthropic/claude-opus-4.6)."""

@@ -42,9 +42,15 @@ def load_trends(source: str = TRENDS_URL, timeout: int = 15) -> dict:
 
 
 def _norm(slug: str) -> str:
-    from .prices import _norm as n
+    """Join key for "my models" × "the world's models".
 
-    return n(slug)
+    Was a plain slug normalization, which never matched: the archive says
+    `anthropic/claude-4.8-opus-20260528` and Claude Code says `claude-opus-4-8`,
+    so every row read "world: no data" no matter how full the archive was.
+    """
+    from .prices import match_key
+
+    return match_key(slug)
 
 
 def build_drift(analyses: list, trends: dict, min_monthly: float = 2.0) -> dict:
@@ -98,7 +104,9 @@ def build_drift(analyses: list, trends: dict, min_monthly: float = 2.0) -> dict:
                 rp = prices.lookup(r["norm"])
                 if rp and my_price and rp[0] < my_price[0]:
                     cheaper_pct = round((1 - rp[0] / my_price[0]) * 100)
-                    alt = (r["norm"], r["pct_4w"], cheaper_pct)
+                    # show the slug people can actually paste into a config;
+                    # `norm` is a join key, not a name
+                    alt = (r.get("slug") or r["norm"], r["pct_4w"], cheaper_pct)
                     break
             line = (
                 f"{m['model']}: you spend {fmt_money(spend, 'estimated')}/mo; world usage "

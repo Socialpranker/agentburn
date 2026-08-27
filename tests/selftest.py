@@ -694,6 +694,30 @@ def main():
     ok("fix: claude-code on a bare machine → honest 'no applicable patches'",
        r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
 
+    print("model identity across naming conventions:")
+    from agentburn.drift import _norm as drift_norm  # noqa: E402
+    from agentburn.prices import match_key  # noqa: E402
+
+    # Local CLIs log "claude-opus-5"; the public ranking says
+    # "anthropic/claude-opus-5-20260723". drift joined on a plain slug, so every
+    # row read "world: no data" even with a full archive.
+    pairs = [
+        ("claude-opus-5", "anthropic/claude-opus-5-20260723"),
+        ("claude-sonnet-5", "anthropic/claude-sonnet-5-20260630"),
+        ("claude-opus-4-8", "anthropic/claude-4.8-opus-20260528"),
+        ("claude-haiku-4-5-20251001", "anthropic/claude-4.5-haiku-20251001"),
+        ("claude-fable-5", "anthropic/claude-5-fable-20260609"),
+    ]
+    for mine, theirs in pairs:
+        ok(f"match: {mine} ↔ {theirs.split('/')[-1]}", match_key(mine) == match_key(theirs),
+           f"{match_key(mine)} vs {match_key(theirs)}")
+    ok("match: different models stay different",
+       match_key("claude-opus-5") != match_key("claude-sonnet-5")
+       and match_key("anthropic/claude-opus-5") != match_key("openai/gpt-5.4"))
+
+    world = {match_key("anthropic/claude-opus-5-20260723"): {"pct_4w": -41.0}}
+    ok("drift: your model finds its world row", drift_norm("claude-opus-5") in world)
+
     print("prices (real snapshot):")
     from agentburn import prices
 
