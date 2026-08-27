@@ -138,7 +138,7 @@ def build_dumps(d: str):
         "messages": [{"role": "user", "content": "U" * 2000}],
     }
     for i in range(3):
-        with open(os.path.join(d, f"request_dump_test_{i}.json"), "w") as f:
+        with open(os.path.join(d, f"request_dump_test_{i}.json"), "w", encoding="utf-8") as f:
             json.dump({"body": body}, f)
 
 
@@ -338,7 +338,7 @@ def main():
         "agent:main:old": {"sessionId": "old", "inputTokens": 1, "outputTokens": 1,
                            "sessionStartedAt": now_ms - 90 * 86400_000},
     }
-    with open(os.path.join(store_dir, "sessions.json"), "w") as f:
+    with open(os.path.join(store_dir, "sessions.json"), "w", encoding="utf-8") as f:
         json.dump(oc_store, f)
     oc = openclaw.load(db_path=oc_root, days=30)
     ok("openclaw: sessions in window", len(oc.sessions) == 5)
@@ -372,15 +372,15 @@ def main():
              "input_tokens": 1_200, "output_tokens": 700,
              "cache_creation_input_tokens": 0, "cache_read_input_tokens": 60_000}}},
     ]
-    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "w") as f:
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "w", encoding="utf-8") as f:
         f.write("\n".join(json.dumps(l) for l in main_lines))
-    with open(os.path.join(sub, "agent-deadbeef.jsonl"), "w") as f:
+    with open(os.path.join(sub, "agent-deadbeef.jsonl"), "w", encoding="utf-8") as f:
         f.write(json.dumps({"type": "assistant", "timestamp": iso(4),
                             "message": {"model": "claude-haiku", "usage": {
                                 "input_tokens": 300, "output_tokens": 100,
                                 "cache_creation_input_tokens": 0,
                                 "cache_read_input_tokens": 1_000}}}))
-    with open(os.path.join(proj, "not-a-session.jsonl"), "w") as f:
+    with open(os.path.join(proj, "not-a-session.jsonl"), "w", encoding="utf-8") as f:
         f.write("{}")  # must be ignored (no uuid name)
     cc = claude_code.load(db_path=cc_root, days=30)
     ok("claude-code: main + subagent parsed, junk ignored", len(cc.sessions) == 2)
@@ -454,7 +454,7 @@ def main():
                                        "inputTokens": 5_000, "outputTokens": 500,
                                        "estimatedCostUsd": 0.9, "status": "timeout",
                                        "startedAt": now_ms - 3000_000}
-    with open(os.path.join(store_dir, "sessions.json"), "w") as f:
+    with open(os.path.join(store_dir, "sessions.json"), "w", encoding="utf-8") as f:
         json.dump(oc_store, f)
     tg_lines = []
     for i in range(5):
@@ -464,7 +464,7 @@ def main():
     for i in range(3):
         tg_lines.append({"message": {"role": "toolResult", "content": [
             {"type": "toolResult", "name": "browser", "isError": True}]}, "timestamp": now_ms - 3400_000 + i})
-    with open(os.path.join(store_dir, "tg.jsonl"), "w") as f:
+    with open(os.path.join(store_dir, "tg.jsonl"), "w", encoding="utf-8") as f:
         f.write("\n".join(json.dumps(l) for l in tg_lines))
     oc2 = openclaw.load(db_path=oc_root, days=30)
     ob_rep = analyze_behavior(oc2)
@@ -492,7 +492,7 @@ def main():
         cc_extra.append({"type": "user", "timestamp": iso(3),
                          "message": {"role": "user", "content": [
                              {"type": "tool_result", "tool_use_id": f"b{i}", "is_error": True}]}})
-    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a") as f:
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a", encoding="utf-8") as f:
         f.write("\n" + "\n".join(json.dumps(l) for l in cc_extra))
     cc2 = claude_code.load(db_path=cc_root, days=30)
     cb_rep = analyze_behavior(cc2)
@@ -650,7 +650,7 @@ def main():
     print("fix (dry-run):")
     jobs_dir = os.path.join(hermes_home, ".hermes", "cron")
     os.makedirs(jobs_dir, exist_ok=True)
-    with open(os.path.join(jobs_dir, "jobs.json"), "w") as f:
+    with open(os.path.join(jobs_dir, "jobs.json"), "w", encoding="utf-8") as f:
         json.dump({"jobs": [{"id": "j1", "name": "nightly digest", "model": "anthropic/claude-opus-4.6"},
                             {"id": "j2", "name": "weekly report", "model": None}]}, f)
     r_fix = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
@@ -696,15 +696,15 @@ def main():
 
     print("skill + server.json:")
     root = os.path.join(os.path.dirname(__file__), "..")
-    skill = open(os.path.join(root, "skill", "agentburn", "SKILL.md")).read()
+    skill = open(os.path.join(root, "skill", "agentburn", "SKILL.md"), encoding="utf-8").read()
     ok("skill: frontmatter + honesty rules",
        skill.startswith("---") and "name: agentburn" in skill and "LOWER BOUND" in skill)
-    srv = json.load(open(os.path.join(root, "server.json")))
+    srv = json.load(open(os.path.join(root, "server.json"), encoding="utf-8"))
     ok("server.json: registry shape", srv["name"] == "io.github.Socialpranker/agentburn"
        and srv["packages"][0]["registryType"] == "pypi"
        and srv["packages"][0]["transport"]["type"] == "stdio"
        and srv["packages"][0]["packageArguments"][0]["value"] == "mcp")
-    readme = open(os.path.join(root, "README.md")).read()
+    readme = open(os.path.join(root, "README.md"), encoding="utf-8").read()
     ok("README carries mcp-name for PyPI validation",
        "mcp-name: io.github.Socialpranker/agentburn" in readme)
 
@@ -714,7 +714,7 @@ def main():
         {"type": "system", "subtype": "compact_boundary", "timestamp": iso(2)},
         {"type": "system", "subtype": "compact_boundary", "timestamp": iso(1)},
     ]
-    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a") as f:
+    with open(os.path.join(proj, "11111111-2222-3333-4444-555555555555.jsonl"), "a", encoding="utf-8") as f:
         f.write("\n" + "\n".join(json.dumps(l) for l in cc_compact))
     cc4 = claude_code.load(db_path=cc_root, days=30)
     ok("cc: compactions counted per session",
@@ -739,7 +739,7 @@ def main():
     from agentburn.drift import build_drift, load_trends, render_drift
 
     trends_path = os.path.join(tempfile.mkdtemp(), "trends.json")
-    with open(trends_path, "w") as f:
+    with open(trends_path, "w", encoding="utf-8") as f:
         json.dump({
             "as_of": "2026-06-10", "days_covered": 40, "warming_up": False,
             "note": "test", "models": {
@@ -825,7 +825,7 @@ def main():
     ok("cli --submit: payload + link, nothing sent",
        r_sub.returncode == 0 and "issues/new" in r_sub.stdout and "Nothing was sent" in r_sub.stdout)
     bench = os.path.join(tempfile.mkdtemp(), "bench.json")
-    with open(bench, "w") as f:
+    with open(bench, "w", encoding="utf-8") as f:
         json.dump(agg, f)
     r_rank = subprocess.run([sys.executable, "-m", "agentburn.cli", "rank", "--agent", "hermes",
                              "--db", env_db, "--benchmark-file", bench, "--no-color"],
@@ -860,9 +860,9 @@ def main():
     quiet_at = now - 2 * 3600
     main_lines = [turn(burst_at + i * 60, "claude-opus-5", inp=1000, out=1000) for i in range(10)]
     main_lines += [turn(quiet_at + i * 60, "claude-sonnet-5", inp=1000, out=0) for i in range(5)]
-    with open(os.path.join(proj, "11111111-1111-4111-8111-111111111111.jsonl"), "w") as f:
+    with open(os.path.join(proj, "11111111-1111-4111-8111-111111111111.jsonl"), "w", encoding="utf-8") as f:
         f.write("\n".join(main_lines) + "\n")
-    with open(os.path.join(subdir, "agent-1.jsonl"), "w") as f:
+    with open(os.path.join(subdir, "agent-1.jsonl"), "w", encoding="utf-8") as f:
         f.write(turn(burst_at + 300, "claude-sonnet-5", inp=0, out=0, cr=100_000) + "\n")
 
     snap_cc = cc.load(db_path=cc_root, days=30, now=now)
@@ -947,10 +947,10 @@ def main():
     from agentburn.fix import build_fixes, render_fixes  # noqa: E402
 
     cc_home = tempfile.mkdtemp()
-    with open(os.path.join(cc_home, ".claude.json"), "w") as f:
+    with open(os.path.join(cc_home, ".claude.json"), "w", encoding="utf-8") as f:
         json.dump({"mcpServers": {"used-server": {}, "idle-server": {}}}, f)
     os.makedirs(os.path.join(cc_home, ".claude"), exist_ok=True)
-    with open(os.path.join(cc_home, ".claude", "CLAUDE.md"), "w") as f:
+    with open(os.path.join(cc_home, ".claude", "CLAUDE.md"), "w", encoding="utf-8") as f:
         f.write("x" * 12_000)  # 3k tokens at 4 chars/token
     saved = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE")}
     os.environ["HOME"] = os.environ["USERPROFILE"] = cc_home
