@@ -10,6 +10,9 @@ source code (June 2026):
   (cron/jobs.py), per-platform toolsets in config.yaml (gateway/run.py).
 - OpenClaw: `agents.defaults.heartbeat.{every, activeHours, model, lightContext}`
   in ~/.openclaw/openclaw.json (config/types.agent-defaults.ts).
+- Claude Code: registered MCP servers in ~/.claude.json / .mcp.json (documented
+  scopes; `claude mcp list|remove`) and the always-loaded CLAUDE.md memory
+  files. Both are levers the user owns; neither is a guess about pricing.
 Findings with no verified lever stay recommendations, not patches.
 """
 
@@ -20,7 +23,7 @@ import os
 from dataclasses import dataclass, field
 
 from .analyze import Analysis
-from .report import fmt_money
+from .report import fmt_money, fmt_tokens
 
 CHEAP_MODEL_HINT = "deepseek/deepseek-chat"  # example; any cheap model works
 EXPENSIVE_HINTS = ("opus", "gpt-5", "o3", "sonnet", "pro")
@@ -54,7 +57,124 @@ def _hermes_jobs(raw):
     return [j for j in raw if isinstance(j, dict)] if isinstance(raw, list) else []
 
 
-def build_fixes(agent: str, source_path: str, a: Analysis, brep=None) -> list:
+CHARS_PER_TOKEN = 4  # same rough ratio the Claude Code adapter uses
+
+
+def _mcp_servers_registered() -> dict:
+    """server name → where it is registered (documented Claude Code scopes)."""
+    found = {}
+    home_cfg = _read_json(os.path.join(os.path.expanduser("~"), ".claude.json")) or {}
+    for name in (home_cfg.get("mcpServers") or {}):
+        found[name] = "~/.claude.json (user scope)"
+    for proj, cfg in (home_cfg.get("projects") or {}).items():
+        for name in ((cfg or {}).get("mcpServers") or {}):
+            found.setdefault(name, f"~/.claude.json → {os.path.basename(proj) or proj}")
+    local = _read_json(os.path.join(os.getcwd(), ".mcp.json")) or {}
+    for name in (local.get("mcpServers") or {}):
+        found.setdefault(name, "./.mcp.json (project scope)")
+    return found
+
+
+def _mcp_servers_used(snap) -> set:
+    """Servers that actually got called, from tool names (`mcp__<server>__<tool>`)."""
+    used = set()
+    for e in getattr(snap, "events", []) or []:
+        if e.name.startswith("mcp__"):
+            parts = e.name.split("__")
+            if len(parts) >= 3:
+                used.add(parts[1])
+    return used
+
+
+def _memory_files() -> list:
+    """(path, tokens) for files Claude Code loads into every session's context."""
+    home = os.path.expanduser("~")
+    out = []
+    for path in (
+        os.path.join(home, ".claude", "CLAUDE.md"),
+        os.path.join(os.getcwd(), "CLAUDE.md"),
+        os.path.join(home, ".claude", "MEMORY.md"),
+    ):
+        try:
+            size = os.path.getsize(path)
+        except OSError:
+            continue
+        out.append((path, size // CHARS_PER_TOKEN))
+    return out
+
+
+def _claude_code_fixes(a: Analysis, snap) -> list:
+    """Levers that exist on a subscription, where dollars are the wrong unit."""
+    patches = []
+
+    registered = _mcp_servers_registered()
+    if registered and snap is not None:
+        used = _mcp_servers_used(snap)
+        idle = sorted(n for n in registered if n not in used)
+        if idle:
+            window = f"the last {a.days}d" if a.days else "this window"
+            patches.append(
+                Patch(
+                    title=f"Drop {len(idle)} MCP server(s) you never called",
+                    target=os.path.join(os.path.expanduser("~"), ".claude.json"),
+                    target_exists=os.path.exists(
+                        os.path.join(os.path.expanduser("~"), ".claude.json")
+                    ),
+                    why=(
+                        f"registered but not called once in {window}: "
+                        + ", ".join(idle[:8])
+                        + (f" (+{len(idle) - 8} more)" if len(idle) > 8 else "")
+                        + ". Every registered server ships its tool definitions with the "
+                        "context of every session that loads it."
+                    ),
+                    impact=(
+                        "shorter tool preamble in every new session — the part of the "
+                        "window you spend before doing any work"
+                    ),
+                    current="\n".join(f"{n}   ← {registered[n]}" for n in idle[:8]),
+                    proposed="\n".join(f"claude mcp remove {n}" for n in idle[:8]),
+                    notes=[
+                        "`claude mcp list` shows the same set with their scopes",
+                        "re-adding is one command — this is reversible by design",
+                        "servers used only outside this window will show up here; check the list before removing",
+                    ],
+                )
+            )
+
+    mem = [(p_, t) for p_, t in _memory_files() if t >= 400]
+    total = sum(t for _, t in mem)
+    if total >= 1500:
+        resends = a.total.sessions
+        patches.append(
+            Patch(
+                title=f"Trim the always-loaded memory files ({total:,} tokens)",
+                target=mem[0][0],
+                target_exists=True,
+                why=(
+                    "these files are loaded into the context of every session and re-sent "
+                    "whenever the prompt cache expires or the context is compacted — "
+                    f"at least {resends} times in this window."
+                ),
+                impact=(
+                    f"≈{fmt_tokens(total * max(resends, 1))} tokens of re-sent context at the "
+                    "current session rate; every trimmed line is paid back on every session"
+                ),
+                current="\n".join(f"{p_}   {t:,} tokens" for p_, t in mem),
+                proposed=(
+                    "keep the rules that change behaviour; move reference material "
+                    "(command catalogues, past incidents, long examples) into a file the "
+                    "agent reads on demand instead of one it always carries"
+                ),
+                notes=[
+                    "a rule only earns its tokens if removing it would change what the agent does",
+                    "prove it: agentburn --save-baseline → trim → agentburn --compare",
+                ],
+            )
+        )
+    return patches
+
+
+def build_fixes(agent: str, source_path: str, a: Analysis, brep=None, snap=None) -> list:
     patches = []
     cost_total = a.total.cost or 0.0
     monthly = a.monthly_projection or 0.0
@@ -124,6 +244,9 @@ def build_fixes(agent: str, source_path: str, a: Analysis, brep=None) -> list:
                 )
             )
 
+    if agent.startswith("claude-code"):
+        patches.extend(_claude_code_fixes(a, snap))
+
     if agent.startswith("openclaw"):
         hb = a.by_source.get("heartbeat")
         if hb:
@@ -179,7 +302,7 @@ def render_fixes(agent: str, patches: list, color: bool = True) -> str:
     out.append("")
     if not patches:
         out.append("   No applicable patches: current findings don't map to a verified config lever.")
-        out.append(dim("   (Claude Code has no cost levers in local config; more generators are coming.)"))
+        out.append(dim("   More generators are coming — open an issue with your setup if yours is missing."))
         out.append("")
         return "\n".join(out)
     for i, p in enumerate(patches, 1):
