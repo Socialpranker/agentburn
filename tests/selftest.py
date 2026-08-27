@@ -393,23 +393,23 @@ def main():
     env_db = os.path.join(tmp, "state.db")
     r = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
                         "--budget-night", "5", "--fail-over", "--no-color"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("sentinel: breach printed and exit 1", r.returncode == 1 and "exceeds budget" in r.stdout)
 
     # A cp1252 console (the Windows default) could not encode the emoji in the
     # report header, so the tool died on its own first line. Pin that shut.
     r_cp = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
                            "--db", env_db, "--no-color"],
-                          capture_output=True, text=True, errors="replace",
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env=dict(os.environ, PYTHONIOENCODING="cp1252"))
     ok("cli survives a non-UTF-8 console", r_cp.returncode == 0
        and "agentburn" in r_cp.stdout, r_cp.stderr[-200:])
     r2 = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
                          "--budget-month", "99999", "--fail-over"],
-                        capture_output=True, text=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("sentinel: under budget → exit 0", r2.returncode == 0)
     r3 = subprocess.run([sys.executable, "-m", "agentburn.cli", "--db", env_db],
-                        capture_output=True, text=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("--db without --agent is a clear error", r3.returncode == 2 and "--agent" in r3.stderr)
 
     print("plain-language section subtitles:")
@@ -495,23 +495,23 @@ def main():
        all(k in rendered for k in ("RE-READ LOOPS", "RETRY STORMS", "IDLE HEARTBEATS",
                                    "BURNED ON FAILURES", "WHAT TO CHANGE", "no content")))
     r_why = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
-                            "--db", env_db, "--no-color"], capture_output=True, text=True)
+                            "--db", env_db, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli why: runs and reports the loop", r_why.returncode == 0 and "read_file" in r_why.stdout)
 
     print("v0.5 UX:")
     r_rep = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
-                            "--db", env_db, "--no-color"], capture_output=True, text=True)
+                            "--db", env_db, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("TL;DR opens the report", "TL;DR:" in r_rep.stdout and "/mo pace" in r_rep.stdout)
     ok("TL;DR names the dominant source", "`cron`" in r_rep.stdout)
     ok("First fix surfaced", "First fix:" in r_rep.stdout)
     ok("Next hints close the report",
        "Next:" in r_rep.stdout and "agentburn why" in r_rep.stdout and "--save-baseline" in r_rep.stdout)
     r_wj = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
-                           "--db", env_db, "--json"], capture_output=True, text=True)
+                           "--db", env_db, "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     wj = json.loads(r_wj.stdout)
     ok("why --json: parses with findings", wj["agentburn_why"] == 1 and len(wj["rereads"]) >= 1)
     r_week = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
-                             "--db", env_db, "--week", "--json"], capture_output=True, text=True)
+                             "--db", env_db, "--week", "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("--week sets a 7-day window", json.loads(r_week.stdout)["days"] == 7)
 
     from agentburn.report import _tldr
@@ -538,16 +538,16 @@ def main():
         ok("ambiguous source raises", "ambiguous" in str(e))
     r_src = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
                             "--db", env_db, "--source", "telegram", "--no-color"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli why --source telegram: header + functions section",
        "gateway:telegram" in r_src.stdout and "WHAT IT ACTUALLY DID" in r_src.stdout
        and "browser" in r_src.stdout)
     r_full = subprocess.run([sys.executable, "-m", "agentburn.cli", "why", "--agent", "hermes",
-                             "--db", env_db, "--no-color"], capture_output=True, text=True)
+                             "--db", env_db, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("full why also lists functions (web_search)", "web_search" in r_full.stdout)
     r_srep = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes",
                              "--db", env_db, "--source", "telegram", "--json"],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
     sj = json.loads(r_srep.stdout)
     ok("report --source: totals are the slice only",
        sj["total"]["sessions"] == 1 and abs(sj["total"]["cost"] - 3.0) < 1e-6)
@@ -579,7 +579,7 @@ def main():
     r_ex = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
                            "--db", env_db, "--llm", f"http://127.0.0.1:{port}/v1",
                            "--model", "test-model", "--no-color"],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("explain: local endpoint works end-to-end",
        r_ex.returncode == 0 and "STUB-ANALYSIS" in r_ex.stdout and "nothing left this machine" in r_ex.stdout)
     content = captured["body"]["messages"][1]["content"]
@@ -591,7 +591,7 @@ def main():
 
     r_rem = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
                             "--db", env_db, "--llm", "http://example.com/v1", "--model", "m"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("explain: remote refused without --yes-remote",
        r_rem.returncode == 2 and "--yes-remote" in r_rem.stderr)
 
@@ -606,7 +606,7 @@ def main():
 
     r_nomodel = subprocess.run([sys.executable, "-m", "agentburn.cli", "explain", "--agent", "hermes",
                                 "--db", env_db, "--llm", f"http://127.0.0.1:{port}/v1"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("explain: missing --model is a clear error", r_nomodel.returncode == 2 and "--model" in r_nomodel.stderr)
     srv.shutdown()
 
@@ -626,7 +626,7 @@ def main():
     env = dict(os.environ, HOME=hermes_home)
     r_mcp = subprocess.run([sys.executable, "-m", "agentburn.cli", "mcp"],
                            input="\n".join([init, tlist, tcall, bad]) + "\n",
-                           capture_output=True, text=True, env=env)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     lines = [json.loads(l) for l in r_mcp.stdout.strip().splitlines()]
     byid = {l.get("id"): l for l in lines}
     ok("mcp: initialize → serverInfo", byid[1]["result"]["serverInfo"]["name"] == "agentburn")
@@ -646,7 +646,7 @@ def main():
                             {"id": "j2", "name": "weekly report", "model": None}]}, f)
     r_fix = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
                             "--db", os.path.join(hermes_home, ".hermes", "state.db"), "--no-color"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("fix: dry-run header, nothing applied", "DRY-RUN" in r_fix.stdout and "nothing was changed" in r_fix.stdout)
     ok("fix: hermes cron patch with real jobs.json path and jobs",
        "cron" in r_fix.stdout and "jobs.json" in r_fix.stdout and "nightly digest" in r_fix.stdout
@@ -654,14 +654,14 @@ def main():
     ok("fix: telegram toolset patch present", "toolset" in r_fix.stdout.lower())
     ok("fix: verified-keys notes", "verified in" in r_fix.stdout)
     r_fix_oc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "openclaw",
-                               "--db", oc_root, "--no-color"], capture_output=True, text=True)
+                               "--db", oc_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("fix: openclaw heartbeat patch (every/activeHours/lightContext)",
        all(k in r_fix_oc.stdout for k in ("heartbeat", "activeHours", "lightContext", "openclaw.json")))
     # Bare HOME: no MCP servers registered, no CLAUDE.md — the generators must
     # stay silent rather than invent a lever (they read the real config, so the
     # test would otherwise depend on the machine it runs on).
     r_fix_cc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "claude-code",
-                               "--db", cc_root, "--no-color"], capture_output=True, text=True,
+                               "--db", cc_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               env=dict(os.environ, HOME=tempfile.mkdtemp()))
     ok("fix: claude-code on a bare machine → honest 'no applicable patches'",
        r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
@@ -681,7 +681,7 @@ def main():
     ok("recommend: cron rule cites real-price saving",
        "saves ≈$" in cron_rec and f"price snapshot {prices.AS_OF}" in cron_rec)
     r_fix2 = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "hermes",
-                             "--db", env_db, "--no-color"], capture_output=True, text=True)
+                             "--db", env_db, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("fix: impact uses price snapshot arithmetic", f"snapshot {prices.AS_OF}" in r_fix2.stdout
        and "saves ≈$" in r_fix2.stdout)
 
@@ -761,7 +761,7 @@ def main():
        "warming up" in render_drift(warm, color=False))
     r_drift = subprocess.run([sys.executable, "-m", "agentburn.cli", "drift", "--agent", "hermes",
                               "--db", env_db, "--trends", trends_path, "--json"],
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
     dj = json.loads(r_drift.stdout)
     ok("cli drift --json works end-to-end", dj["rows"] and dj["advice"])
 
@@ -812,7 +812,7 @@ def main():
     ok("rank: graceful when index insufficient", "be one of the first" in empty)
 
     r_sub = subprocess.run([sys.executable, "-m", "agentburn.cli", "--submit", "--agent", "hermes",
-                            "--db", env_db], capture_output=True, text=True)
+                            "--db", env_db], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli --submit: payload + link, nothing sent",
        r_sub.returncode == 0 and "issues/new" in r_sub.stdout and "Nothing was sent" in r_sub.stdout)
     bench = os.path.join(tempfile.mkdtemp(), "bench.json")
@@ -820,7 +820,7 @@ def main():
         json.dump(agg, f)
     r_rank = subprocess.run([sys.executable, "-m", "agentburn.cli", "rank", "--agent", "hermes",
                              "--db", env_db, "--benchmark-file", bench, "--no-color"],
-                            capture_output=True, text=True)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli rank: end-to-end vs local index", r_rank.returncode == 0 and "Burn Index" in r_rank.stdout)
 
 
@@ -908,14 +908,14 @@ def main():
        "per-call timestamps" in render_limits(lim_hermes, color=False))
 
     r_lim = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
-                            "--db", cc_root, "--no-color"], capture_output=True, text=True)
+                            "--db", cc_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli limits: end-to-end", r_lim.returncode == 0 and "PEAK WINDOW" in r_lim.stdout)
     r_lim_j = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
-                              "--db", cc_root, "--json"], capture_output=True, text=True)
+                              "--db", cc_root, "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli limits --json: machine readable",
        json.loads(r_lim_j.stdout)["peak"]["weight"] > 0)
     r_hit_bad = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--agent", "claude-code",
-                                "--db", cc_root, "--hit", "yesterday"], capture_output=True, text=True)
+                                "--db", cc_root, "--hit", "yesterday"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     ok("cli limits: a bad --hit is a clear error", r_hit_bad.returncode != 0
        and "2026-08-20" in r_hit_bad.stderr)
 
