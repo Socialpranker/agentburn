@@ -58,6 +58,16 @@ TOOLS = [
         "inputSchema": WINDOW,
     },
     {
+        "name": "burn_limits",
+        "description": (
+            "For subscription plans, where the invoice is fixed and what runs out is the usage "
+            "window: how full the peak rolling 5-hour window got, how it compares with a typical "
+            "one, what filled it (model, source, cache reads vs output). Weighted by published "
+            "price ratios; no provider limit formula is assumed. Returns JSON."
+        ),
+        "inputSchema": WINDOW,
+    },
+    {
         "name": "burn_card",
         "description": "Anonymized shareable burn summary (plain text, safe to post).",
         "inputSchema": WINDOW,
@@ -92,6 +102,10 @@ def _call(name: str, args: dict) -> str:
         from .behavior import analyze_behavior, behavior_json
 
         return json.dumps(behavior_json(analyze_behavior(snap)), indent=2, ensure_ascii=False)
+    if name == "burn_limits":
+        from .limits import build_limits, limits_json
+
+        return json.dumps(limits_json(build_limits(snap)), indent=2, ensure_ascii=False)
     if name == "burn_card":
         from .share import share_text
 

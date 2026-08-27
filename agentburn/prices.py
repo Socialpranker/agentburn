@@ -14,7 +14,12 @@ AS_OF = "2026-06-10"
 # slug → (prompt_usd_per_mtok, completion_usd_per_mtok)
 PRICES = {
     "anthropic/claude-opus-4.6": (5.0, 25.0),
+    "anthropic/claude-opus-4.8": (5.0, 25.0),
+    "anthropic/claude-opus-5": (5.0, 25.0),
     "anthropic/claude-sonnet-4.6": (3.0, 15.0),
+    "anthropic/claude-sonnet-5": (3.0, 15.0),
+    "anthropic/claude-haiku-4.5": (1.0, 5.0),
+    "anthropic/claude-fable-5": (10.0, 50.0),
     "deepseek/deepseek-chat": (0.32, 0.89),
     "deepseek/deepseek-v3.2": (0.269, 0.4),
     "google/gemini-3-flash-preview": (0.5, 3.0),
@@ -39,10 +44,23 @@ def _norm(model: str) -> str:
     return m
 
 
+# Agents that talk to one vendor log a bare model id ("claude-opus-5") where
+# routed setups log "anthropic/claude-opus-5". Same model, same price.
+_BARE_PREFIXES = {"claude": "anthropic", "gpt": "openai", "o3": "openai"}
+
+
+def _with_author(m: str) -> str:
+    """Qualify a bare model id with its obvious author, else return it as-is."""
+    if "/" in m:
+        return m
+    author = _BARE_PREFIXES.get(m.split("-", 1)[0])
+    return f"{author}/{m}" if author else m
+
+
 def lookup(model: str) -> Optional[tuple]:
-    """Price for a model slug; tolerant to date suffixes and reorderings
-    (anthropic/claude-4.6-opus-20260205 → anthropic/claude-opus-4.6)."""
-    m = _norm(model)
+    """Price for a model slug; tolerant to date suffixes, reorderings and bare
+    ids (claude-4.6-opus-20260205 → anthropic/claude-opus-4.6)."""
+    m = _with_author(_norm(model))
     if m in PRICES:
         return PRICES[m]
     for slug, p in PRICES.items():

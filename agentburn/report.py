@@ -76,6 +76,13 @@ def _tldr(a: Analysis, recs: list) -> list:
             bits.append(f"{share:.0%} of it is `{src}`")
     line1 = "; ".join(bits) + "."
     lines = [line1]
+    if a.cost_basis == "unknown":
+        # No prices recorded = a subscription. The invoice is fixed; what
+        # actually runs out is the usage window.
+        lines.append(
+            "No prices here — on a subscription what runs out is the window, not the budget: "
+            "`agentburn limits`."
+        )
     if recs:
         first = recs[0].split(" — ")[0].split(". ")[0].strip()
         lines.append(f"First fix: {first[:130]}{'…' if len(first) > 130 else ''}")

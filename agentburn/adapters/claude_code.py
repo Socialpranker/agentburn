@@ -24,7 +24,7 @@ import re
 import time
 from typing import Optional
 
-from ..model import ActionEvent, SessionRec, Snapshot
+from ..model import BUCKET_SECONDS, ActionEvent, SessionRec, Snapshot, UsageCell
 from .hermes import salient_arg
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
@@ -78,11 +78,12 @@ def _parse_ts(v) -> Optional[float]:
     return None
 
 
-def _scan_file(path: str, sid: str, events: list):
+def _scan_file(path: str, sid: str, events: list, cells: dict):
     """→ (first_ts, last_ts, api_calls, usage sums, model, lines, compactions).
 
     Also appends ActionEvents (tool_use with salient arg; tool_result error
-    flags linked by tool_use_id) and counts context compactions — lines whose
+    flags linked by tool_use_id), fills `cells` — (bucket, model) → usage, the
+    intra-session resolution `agentburn limits` needs — and counts compactions — lines whose
     type/subtype mentions a compact boundary (anthropics/claude-code writes
     `subtype: "compact_boundary"`). Each compaction re-sends a near-full
     context window, so the count is a direct cost signal.
@@ -117,10 +118,25 @@ def _scan_file(path: str, sid: str, events: list):
             u = msg.get("usage")
             if isinstance(u, dict):
                 calls += 1
-                inp += int(u.get("input_tokens") or 0)
-                out += int(u.get("output_tokens") or 0)
-                cw += int(u.get("cache_creation_input_tokens") or 0)
-                cr += int(u.get("cache_read_input_tokens") or 0)
+                i_ = int(u.get("input_tokens") or 0)
+                o_ = int(u.get("output_tokens") or 0)
+                w_ = int(u.get("cache_creation_input_tokens") or 0)
+                r_ = int(u.get("cache_read_input_tokens") or 0)
+                inp += i_
+                out += o_
+                cw += w_
+                cr += r_
+                if ts:
+                    key = (int(ts // BUCKET_SECONDS) * BUCKET_SECONDS, msg.get("model"))
+                    c = cells.get(key)
+                    if c is None:
+                        cells[key] = [1, i_, o_, r_, w_]
+                    else:
+                        c[0] += 1
+                        c[1] += i_
+                        c[2] += o_
+                        c[3] += r_
+                        c[4] += w_
             if msg.get("model"):
                 model = msg["model"]
             content = msg.get("content")
@@ -180,11 +196,12 @@ def load(
     def consider(path: str, source: str, parent: Optional[str], title: str):
         sid = os.path.basename(path)[:-6]
         local_events: list = []
+        local_cells: dict = {}
         try:
             if days and os.path.getmtime(path) < since:
                 return
             first, last, calls, inp, out, cr, cw, model, lines, compactions = _scan_file(
-                path, sid, local_events
+                path, sid, local_events, local_cells
             )
         except OSError:
             return
@@ -193,6 +210,21 @@ def load(
         if days and last is not None and last < since:
             return
         snap.events.extend(local_events)
+        for (bucket, cell_model), v in local_cells.items():
+            if days and bucket < since:
+                continue  # a long-lived file can carry buckets from before the window
+            snap.usage_cells.append(
+                UsageCell(
+                    start=bucket,
+                    source=source,
+                    model=cell_model,
+                    calls=v[0],
+                    input_tokens=v[1],
+                    output_tokens=v[2],
+                    cache_read_tokens=v[3],
+                    cache_write_tokens=v[4],
+                )
+            )
         if compactions:
             snap.compactions[sid] = compactions
         snap.sessions.append(

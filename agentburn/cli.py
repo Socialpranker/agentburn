@@ -36,10 +36,26 @@ def parse_night(s: str) -> tuple:
         raise argparse.ArgumentTypeError("night window must look like 0-8 or 23-7")
 
 
+def parse_when(s: str) -> float:
+    """'2026-08-20 14:30' / '2026-08-20T14:30' / '2026-08-20' → local unix seconds."""
+    import datetime as _dt
+
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+        try:
+            return _dt.datetime.strptime(s.strip(), fmt).timestamp()
+        except ValueError:
+            continue
+    raise argparse.ArgumentTypeError(
+        "use local time like '2026-08-20 14:30' (or just '2026-08-20')"
+    )
+
+
 RECIPES = """examples:
   agentburn                          every agent on this machine, last 30 days
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
+  agentburn limits                   subscription plans bill windows, not dollars: how fast you fill one
+  agentburn limits --hit "2026-08-20 14:30"   calibrate against the window where you actually got cut off
   agentburn drift                    your model spend × world usage trend — are you paying for a dying model?
   agentburn rank                     you vs the community Burn Index (efficiency percentiles)
   agentburn --submit                 join the index: anonymized payload + a link YOU click
@@ -61,11 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("command", nargs="?",
-                    choices=["report", "doctor", "why", "explain", "mcp", "fix", "drift", "rank"],
+                    choices=["report", "doctor", "why", "limits", "explain", "mcp", "fix", "drift", "rank"],
                     default="report",
-                    help="report (default) · why (forensics) · drift (spend × world trend) · "
-                         "rank (you vs the Burn Index) · fix (config patches) · explain (LLM) · "
-                         "doctor (accounting health) · mcp")
+                    help="report (default) · why (forensics) · limits (subscription windows) · "
+                         "drift (spend × world trend) · rank (you vs the Burn Index) · "
+                         "fix (config patches) · explain (LLM) · doctor (accounting health) · mcp")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
                     help="profile one agent (default: every agent detected on this machine)")
     ap.add_argument("--db", default=None, help="explicit path to the agent's data (requires --agent)")
@@ -73,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--today", action="store_true", help="shortcut for --days 1")
     ap.add_argument("--week", action="store_true", help="shortcut for --days 7")
     ap.add_argument("--night", type=parse_night, default=(0, 8), help="'while you slept' window, e.g. 0-8 (local)")
+    ap.add_argument("--hit", type=parse_when, default=None, metavar="WHEN",
+                    help="limits: when you were actually cut off ('2026-08-20 14:30') — "
+                         "turns that window into a ceiling measured from your own wall")
+    ap.add_argument("--window", type=float, default=None, metavar="HOURS",
+                    help="limits: window length in hours (default 5)")
     ap.add_argument("--dumps-dir", default=None, help="hermes: directory with request_dump_*.json")
     ap.add_argument("--source", default=None, metavar="NAME",
                     help="drill into one source, e.g. telegram / cron / heartbeat / subagent / cli")
@@ -249,7 +270,9 @@ def main(argv=None) -> int:
 
             snap = load(found[0])
             a = analyze(snap, night_window=args.night)
-            patches = build_fixes(snap.agent, snap.source_path, a, analyze_behavior(snap))
+            patches = build_fixes(
+                snap.agent, snap.source_path, a, analyze_behavior(snap), snap
+            )
             print(render_fixes(snap.agent, patches, color=color))
             return 0
 
@@ -293,6 +316,26 @@ def main(argv=None) -> int:
             print()
             return 0
 
+        if args.command == "limits":
+            from .limits import build_limits, limits_json, render_limits
+
+            reports = [
+                build_limits(
+                    load(n), hit=args.hit, window_hours=args.window or 5.0
+                )
+                for n in found
+            ]
+            if args.json:
+                import json as _json
+
+                payloads = [limits_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_limits(r, color=color))
+            return 0
+
         if args.command == "why":
             from .behavior import analyze_behavior, behavior_json, render_behavior
 
@@ -311,7 +354,8 @@ def main(argv=None) -> int:
                     print(render_behavior(r, color=color))
             return 0
 
-        analyses = [analyze(load(n), night_window=args.night) for n in found]
+        snaps = [load(n) for n in found]
+        analyses = [analyze(sn, night_window=args.night) for sn in snaps]
     except (FileNotFoundError, RuntimeError) as e:
         print(f"agentburn: {e}", file=sys.stderr)
         return 2
@@ -336,12 +380,16 @@ def main(argv=None) -> int:
         return 0
 
     if args.share:
+        from .limits import build_limits
         from .share import share_svg, share_text
 
-        print(share_text(analyses[0]))
+        # The card is the one output people post; on a subscription the window
+        # is the only number on it that means anything.
+        lim = build_limits(snaps[0]) if snaps and snaps[0].usage_cells else None
+        print(share_text(analyses[0], lim))
         if args.svg:
             with open(args.svg, "w", encoding="utf-8") as f:
-                f.write(share_svg(analyses[0]))
+                f.write(share_svg(analyses[0], lim))
             print(f"\nSVG card → {args.svg}", file=sys.stderr)
         return 0
 
@@ -368,14 +416,16 @@ def main(argv=None) -> int:
             breaches += b
 
     if not args.json:
-        _next_hints(args, color)
+        # No cost basis = a subscription (or an agent that records no prices):
+        # dollars are the wrong question there, windows are the right one.
+        _next_hints(args, color, subscription=any(a.cost_basis == "unknown" for a in analyses))
 
     if breaches and args.fail_over:
         return 1
     return 0
 
 
-def _next_hints(args, color: bool) -> None:
+def _next_hints(args, color: bool, subscription: bool = False) -> None:
     """Guided journey: tell the user what this tool can do next — contextually."""
     import os
 
@@ -383,6 +433,11 @@ def _next_hints(args, color: bool) -> None:
 
     dim = (lambda s: f"\033[2m{s}\033[0m") if color else (lambda s: s)
     hints = ["agentburn why            → WHY it burns: loops, retry storms, idle runs"]
+    if subscription:
+        hints.insert(
+            0,
+            "agentburn limits         → how fast you fill a 5-hour window (what a subscription actually bills)",
+        )
     if not os.path.exists(args.baseline_file or baseline.DEFAULT_PATH):
         hints.append("agentburn --save-baseline → snapshot now, prove your savings after you optimize")
     else:

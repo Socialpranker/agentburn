@@ -63,6 +63,33 @@ class ActionEvent:
     tokens: Optional[int] = None  # result weight when the agent recorded it
 
 
+# Usage is bucketed at this resolution before it reaches the analyzer. Fine
+# enough for a rolling 5-hour window (60 buckets), coarse enough that a month
+# of heavy use stays a few thousand cells instead of a million call records.
+BUCKET_SECONDS = 300
+
+
+@dataclass
+class UsageCell:
+    """Usage inside one time bucket, split by source and model.
+
+    Subscription limits are windowed, and a single session routinely spans
+    several windows — so `SessionRec` totals cannot answer "how full is the
+    current window". Adapters that can see per-call timestamps fill these;
+    the others leave the list empty and `agentburn limits` says so instead of
+    guessing.
+    """
+
+    start: int  # unix seconds, floored to BUCKET_SECONDS
+    source: str
+    model: Optional[str]
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+
 @dataclass
 class DumpComposition:
     """Input composition sampled from request dumps (optional, exact-ish)."""
@@ -121,3 +148,5 @@ class Snapshot:
     compactions: dict = field(
         default_factory=dict
     )  # session_id → count of context compactions
+    # windowed usage (only adapters with per-call timestamps fill this)
+    usage_cells: list[UsageCell] = field(default_factory=list)
