@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Socialpranker/agentburn",
   "title": "agentburn",
-  "description": "Local profiler for AI agents: usage windows (which 5-hour window took you out), burn by source, overnight bill, behavioral forensics, config fixes",
+  "description": "Local profiler: which usage window took you out, and where your agent's money goes",
   "repository": {
     "url": "https://github.com/Socialpranker/agentburn",
     "source": "github"

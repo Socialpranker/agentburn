@@ -3,6 +3,9 @@ name: publish-mcp
 on:
   push:
     tags: ["v*"]
+  # The registry caps description at 100 chars and rejects the whole publish
+  # otherwise — this lets a fixed server.json be published without a new tag.
+  workflow_dispatch:
 
 permissions:
   id-token: write # OIDC auth to the MCP registry — no secrets needed
