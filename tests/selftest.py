@@ -21,6 +21,11 @@ from agentburn.analyze import analyze  # noqa: E402
 from agentburn.recommend import recommend  # noqa: E402
 from agentburn.report import fmt_tokens, render_json, render_terminal  # noqa: E402
 
+# Windows consoles default to cp1252, where the ✓ this suite prints is not
+# encodable — the run then dies on its own output instead of on a failure.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 PASSED = 0
 
 
