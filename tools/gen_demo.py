@@ -208,6 +208,49 @@ def scene_report(d: Demo, a: float, b: float, chip=None):
            cls=d.fade(a + 9.6, b))
 
 
+def scene_limits(d: Demo, a: float, b: float, chip=None):
+    """The subscription view: what runs out is the window, not the budget."""
+    d.title("~ agentburn · limits", a, b)
+    if chip:
+        d.scene_chip(chip, a, b)
+    d.cmd(64, "agentburn limits", a + 0.2, b)
+    d.text(24, 100, "⏳ agentburn limits — claude-code · rolling 5-hour windows",
+           bold=True, cls=d.fade(a + 1.8, b))
+    d.text(24, 122, "a subscription bills windows, not dollars: this is how fast you fill one",
+           fill="dd", cls=d.fade(a + 2.0, b))
+    k = d.fade(a + 2.6, b)
+    d.body.append(f'<g class="{k}">')
+    d.text(24, 162, "PEAK WINDOW", bold=True)
+    d.text(200, 162, "Aug 04  12:45–17:45  ·  555M weighted", fill="amber")
+    d.text(200, 184, "opus 91% · sonnet 9%   ·   cli 93% · subagent 7%", fill="dd", size=12.5)
+    d.body.append("</g>")
+    k = d.fade(a + 3.6, b)
+    d.body.append(f'<g class="{k}">')
+    d.text(24, 216, "TYPICAL WINDOW")
+    d.text(200, 216, "104M", fill="t")
+    d.text(280, 216, "median of 83 active 5h slots", fill="dd", size=12.5)
+    d.body.append("</g>")
+    k = d.fade(a + 4.4, b)
+    d.body.append(f'<g class="{k}">')
+    d.text(24, 240, "PEAK / TYPICAL")
+    d.text(200, 240, "5.4×", fill="red", bold=True)
+    d.body.append("</g>")
+    d.callout(470, 240, "a wall is hit by the peak", a + 5.2, b, color="red")
+
+    d.text(24, 292, "WHAT FILLS THE WINDOW", bold=True, cls=d.fade(a + 6.0, b))
+    d.bar(308, "cache reads", 0.64, "blue", "64%", a + 6.4, b)
+    d.bar(334, "cache writes", 0.25, "purple", "25%", a + 6.8, b)
+    d.bar(360, "output", 0.11, "amber", "11%", a + 7.2, b)
+
+    k = d.fade(a + 8.2, b)
+    d.body.append(f'<g class="{k}">')
+    d.text(24, 402, "💡 WHAT MOVES THE NEEDLE", bold=True)
+    d.text(24, 426, "opus was 91% of the peak window; its tokens weigh 1.7× the reference")
+    d.body.append("</g>")
+    d.text(24, 466, "no limit formula is assumed — compare your own windows, or --hit your real cut-off",
+           fill="dd", cls=d.fade(a + 9.2, b), size=12.5)
+
+
 def scene_why(d: Demo, a: float, b: float, chip=None):
     d.title("~ agentburn · why", a, b)
     if chip:
@@ -282,11 +325,12 @@ def scene_fix(d: Demo, a: float, b: float, chip=None):
 
 def build_combined() -> str:
     S, GAP = 11.0, 0.0  # seconds per scene
-    total = S * 3
+    total = S * 4
     d = Demo(total, 508)
-    scene_report(d, 0.0, S - GAP, chip="1 / 3")
-    scene_why(d, S, 2 * S - GAP, chip="2 / 3")
-    scene_fix(d, 2 * S, 3 * S - GAP, chip="3 / 3")
+    scene_report(d, 0.0, S - GAP, chip="1 / 4")
+    scene_limits(d, S, 2 * S - GAP, chip="2 / 4")
+    scene_why(d, 2 * S, 3 * S - GAP, chip="3 / 4")
+    scene_fix(d, 3 * S, 4 * S - GAP, chip="4 / 4")
     return d.render()
 
 
@@ -301,6 +345,7 @@ if __name__ == "__main__":
     out = os.path.join(os.path.dirname(__file__), "..", "assets")
     specs = {
         "demo.svg": build_combined(),
+        "demo-limits.svg": build_single(scene_limits),
         "demo-why.svg": build_single(scene_why),
         "demo-fix.svg": build_single(scene_fix),
     }

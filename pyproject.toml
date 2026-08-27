@@ -4,13 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentburn"
-version = "0.12.3"
-description = "Where does your AI agent burn money? Local token/cost profiler for always-on agents (Hermes Agent first). Zero dependencies."
+version = "0.13.0"
+description = "Which 5-hour window took you out, and where the money goes. Local usage/cost profiler for Claude Code, OpenClaw and Hermes Agent. Zero dependencies, nothing leaves your machine."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Ion" }]
-keywords = ["hermes-agent", "tokens", "cost", "profiler", "ai-agents", "openrouter"]
+keywords = ["claude-code", "usage-limits", "tokens", "cost", "profiler", "ai-agents",
+            "hermes-agent", "openclaw", "mcp", "observability"]
 classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",

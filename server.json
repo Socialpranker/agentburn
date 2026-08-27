@@ -2,19 +2,19 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Socialpranker/agentburn",
   "title": "agentburn",
-  "description": "Local profiler for AI agents: burn by source, overnight bill, behavioral forensics, config fixes",
+  "description": "Local profiler for AI agents: usage windows (which 5-hour window took you out), burn by source, overnight bill, behavioral forensics, config fixes",
   "repository": {
     "url": "https://github.com/Socialpranker/agentburn",
     "source": "github"
   },
   "websiteUrl": "https://github.com/Socialpranker/agentburn",
-  "version": "0.12.3",
+  "version": "0.13.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "agentburn",
-      "version": "0.12.3",
+      "version": "0.13.0",
       "runtimeHint": "uvx",
       "packageArguments": [
         {

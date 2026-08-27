@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agentburn — where does my AI agent spend tokens and money? (Hermes, OpenClaw, Claude Code)</title>
-<meta name="description" content="Find out where your AI agent burns tokens and money: by source (cron, telegram, cli, subagents), night burn, re-read loops, retry storms. Local-only profiler for Hermes Agent, OpenClaw and Claude Code. Try the simulation in your browser — the real tool is `uvx agentburn`.">
+<meta name="description" content="Find out where your AI agent burns tokens, usage limits and money: which 5-hour window took you out, burn by source (cron, telegram, cli, subagents), night burn, re-read loops, retry storms. Local-only profiler for Claude Code, OpenClaw and Hermes Agent. Try the simulation in your browser — the real tool is `uvx agentburn`.">
 <link rel="canonical" href="https://socialpranker.github.io/agentburn/">
 <script type="application/ld+json">
 {"@context":"https://schema.org","@graph":[
@@ -19,6 +19,8 @@
    "acceptedAnswer":{"@type":"Answer","text":"Run `uvx agentburn` — it reads your agent's own local logs (Hermes state.db, OpenClaw sessions, Claude Code transcripts) and breaks spend down by source: cron, telegram/discord gateways, cli, subagents, plus an hourly night-burn strip. Local-only, read-only, nothing leaves your machine."}},
   {"@type":"Question","name":"Why is my Hermes Agent or OpenClaw bill so high at night?",
    "acceptedAnswer":{"@type":"Answer","text":"Usually scheduled work: cron jobs and heartbeats running on an expensive model while you sleep. `agentburn` shows the exact night share and `agentburn fix` proposes paste-ready config patches (cheap model for cron, heartbeat activeHours) with estimated $/month savings."}},
+  {"@type":"Question","name":"Why do I keep hitting my Claude Code usage limit?",
+   "acceptedAnswer":{"@type":"Answer","text":"Limits are windowed, so you run out inside one busy stretch rather than on average use. `agentburn limits` reconstructs your rolling 5-hour windows from local transcripts, shows the peak against the median of your own windows, and breaks down what filled it — model, subagents, cache reads vs output. No provider limit formula is assumed; `--hit \"YYYY-MM-DD HH:MM\"` calibrates against a cut-off you actually experienced."}},
   {"@type":"Question","name":"What is my agent actually doing with all those tokens?",
    "acceptedAnswer":{"@type":"Answer","text":"`agentburn why` reconstructs behavior from the agent's records: which functions it called, re-read loops (same file paid N times), retry storms, idle heartbeats that did nothing, per-cron-run receipts, and context-window compactions."}},
   {"@type":"Question","name":"Does agentburn send my data anywhere?",
@@ -114,6 +116,30 @@ const $$ = s => document.querySelector(s);
 const OUT = $$('#out');
 
 const L = {
+  limits: [
+    ['b t','⏳ agentburn limits — claude-code · rolling 5-hour windows'],
+    ['dd','a subscription bills windows, not dollars: this is how fast you fill one'],
+    ['',''],
+    ['t','<span class="b">PEAK WINDOW</span>        <span class="amber">Aug 04 12:45–17:45 · 555M weighted</span>'],
+    ['dd','                   claude-opus-5 91% · claude-sonnet-5 9%'],
+    ['dd','                   cli 93% · subagent 7%'],
+    ['t','TYPICAL WINDOW         104M   <span class="d">median of 83 active 5h slots</span>'],
+    ['t','PEAK / TYPICAL         <span class="red b">5.4×</span>   <span class="d">a wall is hit by the peak, not by the median</span>'],
+    ['t','LAST 5H               28.1M'],
+    ['t','LAST 7 DAYS           1.64B   <span class="d">weekly caps count this</span>'],
+    ['',''],
+    ['b t','WHAT FILLS THE WINDOW'],
+    ['t','cache reads   <span class="blue">██████████████████████</span><span class="dd">············</span>  <span class="d">64%</span>'],
+    ['t','cache writes  <span class="purple">████████</span><span class="dd">··························</span>  <span class="d">25%</span>'],
+    ['t','output        <span class="amber">███</span><span class="dd">·······························</span>  <span class="d">11%</span>'],
+    ['',''],
+    ['b t','💡 WHAT MOVES THE NEEDLE'],
+    ['t','1. claude-opus-5 was 91% of the peak window — its tokens weigh 1.7× the reference'],
+    ['t','2. cache reads are 64% of the weighted total — that is context volume, not model choice'],
+    ['',''],
+    ['dd','No published formula exists for these allowances, so no absolute threshold is claimed.'],
+    ['dd','Been cut off? agentburn limits --hit "2026-08-20 14:30" measures the ceiling from YOUR wall.'],
+  ],
   report: [
     ['b t','agentburn — hermes · last 30d'],
     ['amber b','TL;DR: ≈ ~$431/mo pace; 79% of it is `cron`.'],
@@ -238,7 +264,8 @@ const L = {
 };
 
 const CMDS = [
-  ['agentburn', 'report'], ['agentburn why', 'why'], ['agentburn why --source telegram', 'telegram'],
+  ['agentburn', 'report'], ['agentburn limits', 'limits'],
+  ['agentburn why', 'why'], ['agentburn why --source telegram', 'telegram'],
   ['agentburn fix', 'fix'], ['agentburn drift', 'drift'], ['agentburn rank', 'rank'],
   ['agentburn --share', 'share'], ['agentburn doctor', 'doctor'],
 ];

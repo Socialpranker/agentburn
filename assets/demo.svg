@@ -1,93 +1,131 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="760" height="508" viewBox="0 0 760 508" role="img" aria-label="agentburn animated demo">
 <style>
-  @keyframes k1 { 0%,0.00% { opacity:0;  } 1.36% { opacity:1;  } 31.52% { opacity:1;  } 33.33%,100% { opacity:0; } }
-  .k1 { opacity:0; animation: k1 33.0s linear infinite; }
-  @keyframes k2 { 0%,0.00% { opacity:0;  } 1.36% { opacity:1;  } 31.52% { opacity:1;  } 33.33%,100% { opacity:0; } }
-  .k2 { opacity:0; animation: k2 33.0s linear infinite; }
-  @keyframes k3 { 0%,0.61% { opacity:0;  } 0.76% { opacity:1;  } 31.52% { opacity:1;  } 33.33%,100% { opacity:0; } }
-  @keyframes k4 { 0%,0.61% { clip-path: inset(0 100% 0 0); } 3.94%,100% { clip-path: inset(0 -2% 0 0); } }
-  .k4 { animation: k4 33.0s steps(15,end) infinite; }
-  .k3 { opacity:0; animation: k3 33.0s linear infinite; }
-  @keyframes k5 { 0%,5.45% { opacity:0; transform: translateY(5px); } 6.82% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k5 { opacity:0; animation: k5 33.0s linear infinite; }
-  @keyframes k6 { 0%,7.27% { opacity:0; transform: translateY(5px); } 8.64% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k6 { opacity:0; animation: k6 33.0s linear infinite; }
-  @keyframes k7 { 0%,12.73% { opacity:0; transform: translateY(5px); } 14.09% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k7 { opacity:0; animation: k7 33.0s linear infinite; }
-  @keyframes k8 { 0%,14.24% { opacity:0; transform: translateY(5px); } 15.61% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k8 { opacity:0; animation: k8 33.0s linear infinite; }
-  @keyframes k9 { 0%,14.55% { transform: scaleX(0); } 16.67% { transform: scaleX(1); } 33.33%,100% { transform: scaleX(0); } }
-  .k9 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k9 33.0s cubic-bezier(.2,.7,.2,1) infinite; }
-  @keyframes k10 { 0%,15.45% { opacity:0; transform: translateY(5px); } 16.82% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k10 { opacity:0; animation: k10 33.0s linear infinite; }
-  @keyframes k11 { 0%,15.76% { transform: scaleX(0); } 17.88% { transform: scaleX(1); } 33.33%,100% { transform: scaleX(0); } }
-  .k11 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k11 33.0s cubic-bezier(.2,.7,.2,1) infinite; }
-  @keyframes k12 { 0%,16.67% { opacity:0; transform: translateY(5px); } 18.03% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k12 { opacity:0; animation: k12 33.0s linear infinite; }
-  @keyframes k13 { 0%,16.97% { transform: scaleX(0); } 19.09% { transform: scaleX(1); } 33.33%,100% { transform: scaleX(0); } }
-  .k13 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k13 33.0s cubic-bezier(.2,.7,.2,1) infinite; }
-  @keyframes k14 { 0%,17.88% { opacity:0; transform: translateY(5px); } 19.24% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k14 { opacity:0; animation: k14 33.0s linear infinite; }
-  @keyframes k15 { 0%,18.18% { transform: scaleX(0); } 20.30% { transform: scaleX(1); } 33.33%,100% { transform: scaleX(0); } }
-  .k15 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k15 33.0s cubic-bezier(.2,.7,.2,1) infinite; }
-  @keyframes k16 { 0%,21.21% { opacity:0; transform: translateY(5px); } 22.58% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k16 { opacity:0; animation: k16 33.0s linear infinite; }
-  @keyframes k17 { 0%,24.24% { opacity:0; transform: scale(.92); } 25.30% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k17 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k17 33.0s linear infinite; }
-  @keyframes k18 { 0%,27.27% { opacity:0; transform: translateY(5px); } 28.64% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k18 { opacity:0; animation: k18 33.0s linear infinite; }
-  @keyframes k19 { 0%,29.09% { opacity:0; transform: translateY(5px); } 30.45% { opacity:1; transform: none; } 31.52% { opacity:1; transform: none; } 33.33%,100% { opacity:0; } }
-  .k19 { opacity:0; animation: k19 33.0s linear infinite; }
-  @keyframes k20 { 0%,33.33% { opacity:0;  } 34.70% { opacity:1;  } 64.85% { opacity:1;  } 66.67%,100% { opacity:0; } }
-  .k20 { opacity:0; animation: k20 33.0s linear infinite; }
-  @keyframes k21 { 0%,33.33% { opacity:0;  } 34.70% { opacity:1;  } 64.85% { opacity:1;  } 66.67%,100% { opacity:0; } }
-  .k21 { opacity:0; animation: k21 33.0s linear infinite; }
-  @keyframes k22 { 0%,33.94% { opacity:0;  } 34.09% { opacity:1;  } 64.85% { opacity:1;  } 66.67%,100% { opacity:0; } }
-  @keyframes k23 { 0%,33.94% { clip-path: inset(0 100% 0 0); } 37.27%,100% { clip-path: inset(0 -2% 0 0); } }
-  .k23 { animation: k23 33.0s steps(15,end) infinite; }
-  .k22 { opacity:0; animation: k22 33.0s linear infinite; }
-  @keyframes k24 { 0%,38.18% { opacity:0; transform: translateY(5px); } 39.55% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k24 { opacity:0; animation: k24 33.0s linear infinite; }
-  @keyframes k25 { 0%,40.00% { opacity:0; transform: translateY(5px); } 41.36% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k25 { opacity:0; animation: k25 33.0s linear infinite; }
-  @keyframes k26 { 0%,44.85% { opacity:0; transform: translateY(5px); } 46.21% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k26 { opacity:0; animation: k26 33.0s linear infinite; }
-  @keyframes k27 { 0%,47.88% { opacity:0; transform: scale(.92); } 48.94% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k27 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k27 33.0s linear infinite; }
-  @keyframes k28 { 0%,50.91% { opacity:0; transform: translateY(5px); } 52.27% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k28 { opacity:0; animation: k28 33.0s linear infinite; }
-  @keyframes k29 { 0%,54.55% { opacity:0; transform: translateY(5px); } 55.91% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k29 { opacity:0; animation: k29 33.0s linear infinite; }
-  @keyframes k30 { 0%,57.58% { opacity:0; transform: scale(.92); } 58.64% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k30 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k30 33.0s linear infinite; }
-  @keyframes k31 { 0%,60.61% { opacity:0; transform: translateY(5px); } 61.97% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k31 { opacity:0; animation: k31 33.0s linear infinite; }
-  @keyframes k32 { 0%,62.42% { opacity:0; transform: translateY(5px); } 63.79% { opacity:1; transform: none; } 64.85% { opacity:1; transform: none; } 66.67%,100% { opacity:0; } }
-  .k32 { opacity:0; animation: k32 33.0s linear infinite; }
-  @keyframes k33 { 0%,66.67% { opacity:0;  } 68.03% { opacity:1;  } 98.18% { opacity:1;  } 100.00%,100% { opacity:0; } }
-  .k33 { opacity:0; animation: k33 33.0s linear infinite; }
-  @keyframes k34 { 0%,66.67% { opacity:0;  } 68.03% { opacity:1;  } 98.18% { opacity:1;  } 100.00%,100% { opacity:0; } }
-  .k34 { opacity:0; animation: k34 33.0s linear infinite; }
-  @keyframes k35 { 0%,67.27% { opacity:0;  } 67.42% { opacity:1;  } 98.18% { opacity:1;  } 100.00%,100% { opacity:0; } }
-  @keyframes k36 { 0%,67.27% { clip-path: inset(0 100% 0 0); } 70.61%,100% { clip-path: inset(0 -2% 0 0); } }
-  .k36 { animation: k36 33.0s steps(15,end) infinite; }
-  .k35 { opacity:0; animation: k35 33.0s linear infinite; }
-  @keyframes k37 { 0%,71.52% { opacity:0; transform: translateY(5px); } 72.88% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k37 { opacity:0; animation: k37 33.0s linear infinite; }
-  @keyframes k38 { 0%,73.94% { opacity:0; transform: translateY(5px); } 75.30% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k38 { opacity:0; animation: k38 33.0s linear infinite; }
-  @keyframes k39 { 0%,80.00% { opacity:0; transform: translateY(5px); } 81.36% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k39 { opacity:0; animation: k39 33.0s linear infinite; }
-  @keyframes k40 { 0%,83.03% { opacity:0; transform: scale(.92); } 84.09% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k40 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k40 33.0s linear infinite; }
-  @keyframes k41 { 0%,86.06% { opacity:0; transform: translateY(5px); } 87.42% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k41 { opacity:0; animation: k41 33.0s linear infinite; }
-  @keyframes k42 { 0%,89.09% { opacity:0; transform: scale(.92); } 90.15% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k42 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k42 33.0s linear infinite; }
-  @keyframes k43 { 0%,92.12% { opacity:0; transform: translateY(5px); } 93.48% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k43 { opacity:0; animation: k43 33.0s linear infinite; }
-  @keyframes k44 { 0%,94.55% { opacity:0; transform: translateY(5px); } 95.91% { opacity:1; transform: none; } 98.18% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
-  .k44 { opacity:0; animation: k44 33.0s linear infinite; }
+  @keyframes k1 { 0%,0.00% { opacity:0;  } 1.02% { opacity:1;  } 23.64% { opacity:1;  } 25.00%,100% { opacity:0; } }
+  .k1 { opacity:0; animation: k1 44.0s linear infinite; }
+  @keyframes k2 { 0%,0.00% { opacity:0;  } 1.02% { opacity:1;  } 23.64% { opacity:1;  } 25.00%,100% { opacity:0; } }
+  .k2 { opacity:0; animation: k2 44.0s linear infinite; }
+  @keyframes k3 { 0%,0.45% { opacity:0;  } 0.57% { opacity:1;  } 23.64% { opacity:1;  } 25.00%,100% { opacity:0; } }
+  @keyframes k4 { 0%,0.45% { clip-path: inset(0 100% 0 0); } 2.95%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k4 { animation: k4 44.0s steps(15,end) infinite; }
+  .k3 { opacity:0; animation: k3 44.0s linear infinite; }
+  @keyframes k5 { 0%,4.09% { opacity:0; transform: translateY(5px); } 5.11% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k5 { opacity:0; animation: k5 44.0s linear infinite; }
+  @keyframes k6 { 0%,5.45% { opacity:0; transform: translateY(5px); } 6.48% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k6 { opacity:0; animation: k6 44.0s linear infinite; }
+  @keyframes k7 { 0%,9.55% { opacity:0; transform: translateY(5px); } 10.57% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k7 { opacity:0; animation: k7 44.0s linear infinite; }
+  @keyframes k8 { 0%,10.68% { opacity:0; transform: translateY(5px); } 11.70% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k8 { opacity:0; animation: k8 44.0s linear infinite; }
+  @keyframes k9 { 0%,10.91% { transform: scaleX(0); } 12.50% { transform: scaleX(1); } 25.00%,100% { transform: scaleX(0); } }
+  .k9 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k9 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k10 { 0%,11.59% { opacity:0; transform: translateY(5px); } 12.61% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k10 { opacity:0; animation: k10 44.0s linear infinite; }
+  @keyframes k11 { 0%,11.82% { transform: scaleX(0); } 13.41% { transform: scaleX(1); } 25.00%,100% { transform: scaleX(0); } }
+  .k11 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k11 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k12 { 0%,12.50% { opacity:0; transform: translateY(5px); } 13.52% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k12 { opacity:0; animation: k12 44.0s linear infinite; }
+  @keyframes k13 { 0%,12.73% { transform: scaleX(0); } 14.32% { transform: scaleX(1); } 25.00%,100% { transform: scaleX(0); } }
+  .k13 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k13 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k14 { 0%,13.41% { opacity:0; transform: translateY(5px); } 14.43% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k14 { opacity:0; animation: k14 44.0s linear infinite; }
+  @keyframes k15 { 0%,13.64% { transform: scaleX(0); } 15.23% { transform: scaleX(1); } 25.00%,100% { transform: scaleX(0); } }
+  .k15 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k15 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k16 { 0%,15.91% { opacity:0; transform: translateY(5px); } 16.93% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k16 { opacity:0; animation: k16 44.0s linear infinite; }
+  @keyframes k17 { 0%,18.18% { opacity:0; transform: scale(.92); } 18.98% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k17 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k17 44.0s linear infinite; }
+  @keyframes k18 { 0%,20.45% { opacity:0; transform: translateY(5px); } 21.48% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k18 { opacity:0; animation: k18 44.0s linear infinite; }
+  @keyframes k19 { 0%,21.82% { opacity:0; transform: translateY(5px); } 22.84% { opacity:1; transform: none; } 23.64% { opacity:1; transform: none; } 25.00%,100% { opacity:0; } }
+  .k19 { opacity:0; animation: k19 44.0s linear infinite; }
+  @keyframes k20 { 0%,25.00% { opacity:0;  } 26.02% { opacity:1;  } 48.64% { opacity:1;  } 50.00%,100% { opacity:0; } }
+  .k20 { opacity:0; animation: k20 44.0s linear infinite; }
+  @keyframes k21 { 0%,25.00% { opacity:0;  } 26.02% { opacity:1;  } 48.64% { opacity:1;  } 50.00%,100% { opacity:0; } }
+  .k21 { opacity:0; animation: k21 44.0s linear infinite; }
+  @keyframes k22 { 0%,25.45% { opacity:0;  } 25.57% { opacity:1;  } 48.64% { opacity:1;  } 50.00%,100% { opacity:0; } }
+  @keyframes k23 { 0%,25.45% { clip-path: inset(0 100% 0 0); } 27.95%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k23 { animation: k23 44.0s steps(18,end) infinite; }
+  .k22 { opacity:0; animation: k22 44.0s linear infinite; }
+  @keyframes k24 { 0%,29.09% { opacity:0; transform: translateY(5px); } 30.11% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k24 { opacity:0; animation: k24 44.0s linear infinite; }
+  @keyframes k25 { 0%,29.55% { opacity:0; transform: translateY(5px); } 30.57% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k25 { opacity:0; animation: k25 44.0s linear infinite; }
+  @keyframes k26 { 0%,30.91% { opacity:0; transform: translateY(5px); } 31.93% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k26 { opacity:0; animation: k26 44.0s linear infinite; }
+  @keyframes k27 { 0%,33.18% { opacity:0; transform: translateY(5px); } 34.20% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k27 { opacity:0; animation: k27 44.0s linear infinite; }
+  @keyframes k28 { 0%,35.00% { opacity:0; transform: translateY(5px); } 36.02% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k28 { opacity:0; animation: k28 44.0s linear infinite; }
+  @keyframes k29 { 0%,36.82% { opacity:0; transform: scale(.92); } 37.61% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k29 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k29 44.0s linear infinite; }
+  @keyframes k30 { 0%,38.64% { opacity:0; transform: translateY(5px); } 39.66% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k30 { opacity:0; animation: k30 44.0s linear infinite; }
+  @keyframes k31 { 0%,39.55% { opacity:0; transform: translateY(5px); } 40.57% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k31 { opacity:0; animation: k31 44.0s linear infinite; }
+  @keyframes k32 { 0%,39.77% { transform: scaleX(0); } 41.36% { transform: scaleX(1); } 50.00%,100% { transform: scaleX(0); } }
+  .k32 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k32 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k33 { 0%,40.45% { opacity:0; transform: translateY(5px); } 41.48% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k33 { opacity:0; animation: k33 44.0s linear infinite; }
+  @keyframes k34 { 0%,40.68% { transform: scaleX(0); } 42.27% { transform: scaleX(1); } 50.00%,100% { transform: scaleX(0); } }
+  .k34 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k34 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k35 { 0%,41.36% { opacity:0; transform: translateY(5px); } 42.39% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k35 { opacity:0; animation: k35 44.0s linear infinite; }
+  @keyframes k36 { 0%,41.59% { transform: scaleX(0); } 43.18% { transform: scaleX(1); } 50.00%,100% { transform: scaleX(0); } }
+  .k36 { transform: scaleX(0); transform-box: fill-box; transform-origin: left center; animation: k36 44.0s cubic-bezier(.2,.7,.2,1) infinite; }
+  @keyframes k37 { 0%,43.64% { opacity:0; transform: translateY(5px); } 44.66% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k37 { opacity:0; animation: k37 44.0s linear infinite; }
+  @keyframes k38 { 0%,45.91% { opacity:0; transform: translateY(5px); } 46.93% { opacity:1; transform: none; } 48.64% { opacity:1; transform: none; } 50.00%,100% { opacity:0; } }
+  .k38 { opacity:0; animation: k38 44.0s linear infinite; }
+  @keyframes k39 { 0%,50.00% { opacity:0;  } 51.02% { opacity:1;  } 73.64% { opacity:1;  } 75.00%,100% { opacity:0; } }
+  .k39 { opacity:0; animation: k39 44.0s linear infinite; }
+  @keyframes k40 { 0%,50.00% { opacity:0;  } 51.02% { opacity:1;  } 73.64% { opacity:1;  } 75.00%,100% { opacity:0; } }
+  .k40 { opacity:0; animation: k40 44.0s linear infinite; }
+  @keyframes k41 { 0%,50.45% { opacity:0;  } 50.57% { opacity:1;  } 73.64% { opacity:1;  } 75.00%,100% { opacity:0; } }
+  @keyframes k42 { 0%,50.45% { clip-path: inset(0 100% 0 0); } 52.95%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k42 { animation: k42 44.0s steps(15,end) infinite; }
+  .k41 { opacity:0; animation: k41 44.0s linear infinite; }
+  @keyframes k43 { 0%,53.64% { opacity:0; transform: translateY(5px); } 54.66% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k43 { opacity:0; animation: k43 44.0s linear infinite; }
+  @keyframes k44 { 0%,55.00% { opacity:0; transform: translateY(5px); } 56.02% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k44 { opacity:0; animation: k44 44.0s linear infinite; }
+  @keyframes k45 { 0%,58.64% { opacity:0; transform: translateY(5px); } 59.66% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k45 { opacity:0; animation: k45 44.0s linear infinite; }
+  @keyframes k46 { 0%,60.91% { opacity:0; transform: scale(.92); } 61.70% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k46 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k46 44.0s linear infinite; }
+  @keyframes k47 { 0%,63.18% { opacity:0; transform: translateY(5px); } 64.20% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k47 { opacity:0; animation: k47 44.0s linear infinite; }
+  @keyframes k48 { 0%,65.91% { opacity:0; transform: translateY(5px); } 66.93% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k48 { opacity:0; animation: k48 44.0s linear infinite; }
+  @keyframes k49 { 0%,68.18% { opacity:0; transform: scale(.92); } 68.98% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k49 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k49 44.0s linear infinite; }
+  @keyframes k50 { 0%,70.45% { opacity:0; transform: translateY(5px); } 71.48% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k50 { opacity:0; animation: k50 44.0s linear infinite; }
+  @keyframes k51 { 0%,71.82% { opacity:0; transform: translateY(5px); } 72.84% { opacity:1; transform: none; } 73.64% { opacity:1; transform: none; } 75.00%,100% { opacity:0; } }
+  .k51 { opacity:0; animation: k51 44.0s linear infinite; }
+  @keyframes k52 { 0%,75.00% { opacity:0;  } 76.02% { opacity:1;  } 98.64% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  .k52 { opacity:0; animation: k52 44.0s linear infinite; }
+  @keyframes k53 { 0%,75.00% { opacity:0;  } 76.02% { opacity:1;  } 98.64% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  .k53 { opacity:0; animation: k53 44.0s linear infinite; }
+  @keyframes k54 { 0%,75.45% { opacity:0;  } 75.57% { opacity:1;  } 98.64% { opacity:1;  } 100.00%,100% { opacity:0; } }
+  @keyframes k55 { 0%,75.45% { clip-path: inset(0 100% 0 0); } 77.95%,100% { clip-path: inset(0 -2% 0 0); } }
+  .k55 { animation: k55 44.0s steps(15,end) infinite; }
+  .k54 { opacity:0; animation: k54 44.0s linear infinite; }
+  @keyframes k56 { 0%,78.64% { opacity:0; transform: translateY(5px); } 79.66% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k56 { opacity:0; animation: k56 44.0s linear infinite; }
+  @keyframes k57 { 0%,80.45% { opacity:0; transform: translateY(5px); } 81.48% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k57 { opacity:0; animation: k57 44.0s linear infinite; }
+  @keyframes k58 { 0%,85.00% { opacity:0; transform: translateY(5px); } 86.02% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k58 { opacity:0; animation: k58 44.0s linear infinite; }
+  @keyframes k59 { 0%,87.27% { opacity:0; transform: scale(.92); } 88.07% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k59 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k59 44.0s linear infinite; }
+  @keyframes k60 { 0%,89.55% { opacity:0; transform: translateY(5px); } 90.57% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k60 { opacity:0; animation: k60 44.0s linear infinite; }
+  @keyframes k61 { 0%,91.82% { opacity:0; transform: scale(.92); } 92.61% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k61 { opacity:0; transform-box: fill-box; transform-origin: left center; animation: k61 44.0s linear infinite; }
+  @keyframes k62 { 0%,94.09% { opacity:0; transform: translateY(5px); } 95.11% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k62 { opacity:0; animation: k62 44.0s linear infinite; }
+  @keyframes k63 { 0%,95.91% { opacity:0; transform: translateY(5px); } 96.93% { opacity:1; transform: none; } 98.64% { opacity:1; transform: none; } 100.00%,100% { opacity:0; } }
+  .k63 { opacity:0; animation: k63 44.0s linear infinite; }
 </style>
 <rect width="760" height="508" rx="12" fill="#0b0d10"/>
 <rect width="760" height="34" rx="12" fill="#14181d"/>
@@ -96,7 +134,7 @@
 <text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k1">~ agentburn · report</text>
 <g class="k2">
 <rect x="660" y="46" width="76" height="22" rx="11" fill="#14181d"/>
-<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">1 / 3</text>
+<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">1 / 4</text>
 </g>
 <g class="k3">
 <text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
@@ -149,81 +187,135 @@
 <text x="370" y="440" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">→ night burn ≈ $0</text>
 </g>
 <text x="24" y="478" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k19">local · read-only · nothing leaves this machine</text>
-<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k20">~ agentburn · why</text>
+<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k20">~ agentburn · limits</text>
 <g class="k21">
 <rect x="660" y="46" width="76" height="22" rx="11" fill="#14181d"/>
-<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">2 / 3</text>
+<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">2 / 4</text>
 </g>
 <g class="k22">
 <text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
 <g class="k23">
+<text x="40" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">agentburn limits</text>
+</g></g>
+<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="k24">⏳ agentburn limits — claude-code · rolling 5-hour windows</text>
+<text x="24" y="122" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k25">a subscription bills windows, not dollars: this is how fast you fill one</text>
+<g class="k26">
+<text x="24" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">PEAK WINDOW</text>
+<text x="200" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f5d76e" class="">Aug 04  12:45–17:45  ·  555M weighted</text>
+<text x="200" y="184" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6670" class="">opus 91% · sonnet 9%   ·   cli 93% · subagent 7%</text>
+</g>
+<g class="k27">
+<text x="24" y="216" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">TYPICAL WINDOW</text>
+<text x="200" y="216" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">104M</text>
+<text x="280" y="216" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6670" class="">median of 83 active 5h slots</text>
+</g>
+<g class="k28">
+<text x="24" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">PEAK / TYPICAL</text>
+<text x="200" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f7a08a" font-weight="bold" class="">5.4×</text>
+</g>
+<g class="k29">
+<rect x="470" y="240" width="216" height="26" rx="13" fill="#f7a08a" opacity="0.16"/>
+<text x="483" y="257" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f7a08a">a wall is hit by the peak</text>
+</g>
+<text x="24" y="292" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="k30">WHAT FILLS THE WINDOW</text>
+<g class="k31">
+<text x="24" y="318" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">cache reads</text>
+<rect x="120" y="308" width="380" height="11" rx="5.5" fill="#1b2026"/>
+<rect x="120" y="308" width="243" height="11" rx="5.5" fill="#5ab0f7" class="k32"/>
+<text x="516" y="318" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">64%</text>
+</g>
+<g class="k33">
+<text x="24" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">cache writes</text>
+<rect x="120" y="334" width="380" height="11" rx="5.5" fill="#1b2026"/>
+<rect x="120" y="334" width="95" height="11" rx="5.5" fill="#c89bf7" class="k34"/>
+<text x="516" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">25%</text>
+</g>
+<g class="k35">
+<text x="24" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">output</text>
+<rect x="120" y="360" width="380" height="11" rx="5.5" fill="#1b2026"/>
+<rect x="120" y="360" width="41" height="11" rx="5.5" fill="#f5d76e" class="k36"/>
+<text x="516" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">11%</text>
+</g>
+<g class="k37">
+<text x="24" y="402" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">💡 WHAT MOVES THE NEEDLE</text>
+<text x="24" y="426" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">opus was 91% of the peak window; its tokens weigh 1.7× the reference</text>
+</g>
+<text x="24" y="466" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12.5" fill="#5c6670" class="k38">no limit formula is assumed — compare your own windows, or --hit your real cut-off</text>
+<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k39">~ agentburn · why</text>
+<g class="k40">
+<rect x="660" y="46" width="76" height="22" rx="11" fill="#14181d"/>
+<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">3 / 4</text>
+</g>
+<g class="k41">
+<text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
+<g class="k42">
 <text x="40" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">agentburn why</text>
 </g></g>
-<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="k24">🔬 what the agent actually did — from its own records</text>
-<g class="k25">
+<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="k43">🔬 what the agent actually did — from its own records</text>
+<g class="k44">
 <text x="24" y="136" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">WHAT IT ACTUALLY DID</text>
 <text x="24" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">browser</text>
 <text x="140" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">34×  ≈210K in results</text>
 <text x="24" y="182" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">web_search</text>
 <text x="140" y="182" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">18×</text>
 </g>
-<g class="k26">
+<g class="k45">
 <text x="24" y="220" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">RE-READ LOOPS</text>
 <text x="24" y="244" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">4× read_file(/proj/big.md)  ≈32K re-paid</text>
 </g>
-<g class="k27">
+<g class="k46">
 <rect x="396" y="230" width="208" height="26" rx="13" fill="#f5d76e" opacity="0.16"/>
 <text x="409" y="247" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f5d76e">same file — paid 4 times</text>
 </g>
-<g class="k28">
+<g class="k47">
 <text x="24" y="282" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">RETRY STORMS</text>
 <text x="24" y="306" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f7a08a" class="">Bash: 3 errors / 6 calls — re-paid each time</text>
 </g>
-<g class="k29">
+<g class="k48">
 <text x="24" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">IDLE HEARTBEATS</text>
 <text x="24" y="368" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f7a08a" class="">4 of 9 heartbeat runs did NOTHING — $2.40 of idle burn</text>
 </g>
-<g class="k30">
+<g class="k49">
 <rect x="516" y="354" width="216" height="26" rx="13" fill="#f7a08a" opacity="0.16"/>
 <text x="529" y="371" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f7a08a">woke up · thought · slept</text>
 </g>
-<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k31">💡 1. cache big.md  2. fix Bash flags  3. heartbeat → cheap model</text>
-<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k32">observations with numbers — not verdicts · content never read</text>
-<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k33">~ agentburn · fix</text>
-<g class="k34">
+<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k50">💡 1. cache big.md  2. fix Bash flags  3. heartbeat → cheap model</text>
+<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k51">observations with numbers — not verdicts · content never read</text>
+<text x="380" y="21" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#5c6670" class="k52">~ agentburn · fix</text>
+<g class="k53">
 <rect x="660" y="46" width="76" height="22" rx="11" fill="#14181d"/>
-<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">3 / 3</text>
+<text x="698" text-anchor="middle" y="61" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#5c6670" class="">4 / 4</text>
 </g>
-<g class="k35">
+<g class="k54">
 <text x="24" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">$</text>
-<g class="k36">
+<g class="k55">
 <text x="40" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="">agentburn fix</text>
 </g></g>
-<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f5d76e" font-weight="bold" class="k37">🔧 DRY-RUN — nothing was changed</text>
-<g class="k38">
+<text x="24" y="100" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#f5d76e" font-weight="bold" class="k56">🔧 DRY-RUN — nothing was changed</text>
+<g class="k57">
 <text x="24" y="138" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">1. Point Hermes cron jobs at a cheap model</text>
 <text x="40" y="162" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">file   : ~/.hermes/cron/jobs.json</text>
 <text x="40" y="184" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">why    : cron is 79% of spend</text>
 <text x="40" y="206" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">effect : bulk of ≈$341/mo → cheap-model pricing</text>
 </g>
-<g class="k39">
+<g class="k58">
 <text x="40" y="240" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#8a949e" class="">proposed:</text>
 <rect x="40" y="252" width="560" height="30" rx="6" fill="#1b2026"/>
 <text x="52" y="272" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"nightly digest": "model": "deepseek/deepseek-chat"</text>
 </g>
-<g class="k40">
+<g class="k59">
 <rect x="612" y="254" width="110" height="26" rx="13" fill="#7df0a8" opacity="0.16"/>
 <text x="625" y="271" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#7df0a8">paste-ready</text>
 </g>
-<g class="k41">
+<g class="k60">
 <text x="24" y="320" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" font-weight="bold" class="">2. Tame the OpenClaw heartbeat</text>
 <text x="40" y="344" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"activeHours": { "start": "09:00", "end": "24:00" }</text>
 <text x="40" y="366" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#7df0a8" class="">"lightContext": true</text>
 </g>
-<g class="k42">
+<g class="k61">
 <rect x="444" y="332" width="186" height="26" rx="13" fill="#f7a08a" opacity="0.16"/>
 <text x="457" y="349" font-family="system-ui, -apple-system, sans-serif" font-size="12.5" font-weight="600" fill="#f7a08a">the night-burn killer</text>
 </g>
-<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k43">ⓘ keys verified against the agents' source code</text>
-<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k44">prove it: agentburn --save-baseline → paste → agentburn --compare</text>
+<text x="24" y="410" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#5c6670" class="k62">ⓘ keys verified against the agents' source code</text>
+<text x="24" y="446" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13.5" fill="#e6e9ec" class="k63">prove it: agentburn --save-baseline → paste → agentburn --compare</text>
 </svg>

@@ -1,6 +1,6 @@
 ---
 name: agentburn
-description: Answer questions about this agent's own token spend and burn. Use when the user asks "how much am I spending", "where do my tokens go", "what did you burn while I slept", "почему так дорого", "сколько я трачу", asks for a cost/usage breakdown, wants to cut the agent's bill, or asks what the agent has been doing (functions, loops, failures). Runs the local agentburn profiler (zero-dependency, read-only, nothing leaves the machine).
+description: Answer questions about this agent's own token spend, usage limits and burn. Use when the user asks "how much am I spending", "where do my tokens go", "why do I keep hitting my limit", "what ate my 5-hour window", "what did you burn while I slept", "почему так дорого", "сколько я трачу", "почему упёрся в лимит", asks for a cost/usage breakdown, wants to cut the agent's bill, or asks what the agent has been doing (functions, loops, failures). Runs the local agentburn profiler (zero-dependency, read-only, nothing leaves the machine).
 ---
 
 # agentburn — the agent answers for its own bill
@@ -19,9 +19,18 @@ database read-only. Use it instead of guessing about costs.
 3. For "what have you been doing / why is it expensive":
    run `uvx agentburn why --json` and read: `functions`, `rereads`,
    `storms`, `idle_heartbeats`, `failure_cost`, `observations`.
-4. For one channel ("what did you do in telegram?"):
+4. For "why did I hit my limit / what ate my window" (subscriptions —
+   Claude Code Pro/Max — where the invoice is fixed and the window is not):
+   run `uvx agentburn limits --json` and read: `peak` (the worst rolling
+   5-hour window), `typical_window`, `peak_by_model`, `peak_by_source`,
+   `mix`, `tips`. Lead with peak ÷ typical: a wall is hit by the peak.
+   If the user remembers when they were cut off, re-run with
+   `--hit "YYYY-MM-DD HH:MM"` — that turns their own cut-off into a
+   measured ceiling and everything else into a percentage of it.
+   Never state an absolute limit: the provider's formula is not public.
+5. For one channel ("what did you do in telegram?"):
    add `--source telegram` (or cron / heartbeat / subagent / cli).
-5. Answer in the user's language, lead with the verdict
+6. Answer in the user's language, lead with the verdict
    (pace + dominant source), quote at most 3 numbers, then the single
    highest-impact change. Mark estimated costs with "~".
 
