@@ -17,16 +17,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set version from tag
+      # On a tag the tag is the truth; on a manual re-publish (a rejected
+      # server.json, no new code) server.json is.
+      - name: Resolve version
+        id: v
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION=${GITHUB_REF_NAME#v}
+          else
+            VERSION=$(jq -r .version server.json)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp
           mv server.tmp server.json
           cat server.json
 
       - name: Wait for the package on PyPI (registry validates it there)
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${{ steps.v.outputs.version }}
           for i in $(seq 1 40); do
             if curl -fsS "https://pypi.org/pypi/agentburn/$VERSION/json" >/dev/null 2>&1; then
               echo "PyPI has agentburn $VERSION"; exit 0
