@@ -38,6 +38,15 @@ def ok(name: str, cond: bool, extra: str = ""):
     print(f"  ✓ {name}")
 
 
+def fake_home(path: str) -> dict:
+    """Env with `~` pointed at `path` on every platform.
+
+    ntpath.expanduser reads USERPROFILE, not HOME — setting only HOME made the
+    MCP tests look at the real home directory on Windows.
+    """
+    return dict(os.environ, HOME=path, USERPROFILE=path)
+
+
 def night_ts(days_ago: float, hour: float) -> float:
     """A timestamp `days_ago` days back at local `hour` (fractional ok)."""
     t = time.localtime(time.time() - days_ago * 86400)
@@ -617,13 +626,13 @@ def main():
     tcall = json.dumps({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                         "params": {"name": "burn_report", "arguments": {"agent": "hermes"}}})
     bad = json.dumps({"jsonrpc": "2.0", "id": 4, "method": "nope"})
-    env = dict(os.environ, HOME=os.path.dirname(env_db))  # hermes adapter won't find ~/.hermes; pass agent+db? mcp uses default paths →
+    env = fake_home(os.path.dirname(env_db))  # mcp resolves the agent from default paths
     # точечно: подменяем default_db_path через HERMES-структуру в tmp
     hermes_home = tempfile.mkdtemp()
     os.makedirs(os.path.join(hermes_home, ".hermes"), exist_ok=True)
     import shutil
     shutil.copy(env_db, os.path.join(hermes_home, ".hermes", "state.db"))
-    env = dict(os.environ, HOME=hermes_home)
+    env = fake_home(hermes_home)
     r_mcp = subprocess.run([sys.executable, "-m", "agentburn.cli", "mcp"],
                            input="\n".join([init, tlist, tcall, bad]) + "\n",
                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
@@ -662,7 +671,7 @@ def main():
     # test would otherwise depend on the machine it runs on).
     r_fix_cc = subprocess.run([sys.executable, "-m", "agentburn.cli", "fix", "--agent", "claude-code",
                                "--db", cc_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              env=dict(os.environ, HOME=tempfile.mkdtemp()))
+                              env=fake_home(tempfile.mkdtemp()))
     ok("fix: claude-code on a bare machine → honest 'no applicable patches'",
        r_fix_cc.returncode == 0 and "No applicable patches" in r_fix_cc.stdout)
 
@@ -943,16 +952,19 @@ def main():
     os.makedirs(os.path.join(cc_home, ".claude"), exist_ok=True)
     with open(os.path.join(cc_home, ".claude", "CLAUDE.md"), "w") as f:
         f.write("x" * 12_000)  # 3k tokens at 4 chars/token
-    old_home = os.environ.get("HOME")
-    os.environ["HOME"] = cc_home
+    saved = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE")}
+    os.environ["HOME"] = os.environ["USERPROFILE"] = cc_home
     try:
         from agentburn.model import ActionEvent  # noqa: E402
 
         snap_cc.events.append(ActionEvent(session_id="s", ts=now, name="mcp__used-server__do"))
         patches = build_fixes("claude-code", cc_root, a_cc, None, snap_cc)
     finally:
-        if old_home is not None:
-            os.environ["HOME"] = old_home
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     titles = " | ".join(p_.title for p_ in patches)
     ok("fix: idle MCP server found, used one left alone",
        "1 MCP server" in titles and "idle-server" in " ".join(p_.current for p_ in patches)
