@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentburn"
-version = "0.13.2"
+version = "0.13.3"
 description = "Which 5-hour window took you out, and where the money goes. Local usage/cost profiler for Claude Code, OpenClaw and Hermes Agent. Zero dependencies, nothing leaves your machine."
 readme = "README.md"
 requires-python = ">=3.9"
