@@ -101,6 +101,7 @@ class DumpComposition:
 
 
 _AGENT_LABELS = {
+    "codex": "Codex CLI",
     "hermes": "Hermes",
     "openclaw": "OpenClaw",
     "claude-code": "Claude Code",
@@ -108,6 +109,7 @@ _AGENT_LABELS = {
 
 # Storage the user would name in an upstream bug report, per agent.
 _AGENT_STORES = {
+    "codex": "`~/.codex/sessions/**/*.jsonl`",
     "hermes": "`~/.hermes/state.db`",
     "openclaw": "the local transcript store",
     "claude-code": "`~/.claude/projects/**.jsonl`",

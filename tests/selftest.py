@@ -396,8 +396,100 @@ def main():
     ok("claude-code: cost basis unknown, tokens counted",
        ca.cost_basis == "unknown" and ca.total.tokens > 100_000)
 
-    print("multi-agent cli + sentinel:")
+    print("codex adapter:")
+    from agentburn.adapters import codex
+
+    codex_root = os.path.join(tempfile.mkdtemp(), "sessions")
+    codex_day = os.path.join(codex_root, "2026", "08", "27")
+    os.makedirs(codex_day)
+    codex_path = os.path.join(
+        codex_day,
+        "rollout-2026-08-27T05-22-54-11111111-2222-3333-4444-555555555555.jsonl",
+    )
+
+    def codex_line(ts, kind, payload):
+        return json.dumps({
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z",
+            "type": kind,
+            "payload": payload,
+        })
+
+    cts = time.time() - 3600
+    codex_lines = [
+        codex_line(cts, "session_meta", {
+            "session_id": "codex-session-1",
+            "source": "codex_cli",
+            "originator": "codex_cli",
+            "cwd": "/tmp/codex-demo",
+        }),
+        codex_line(cts + 1, "turn_context", {"model": "gpt-5-codex"}),
+        codex_line(cts + 2, "response_item", {
+            "type": "function_call",
+            "call_id": "call-read",
+            "name": "read_file",
+            "arguments": json.dumps({"file_path": "/repo/README.md"}),
+        }),
+        codex_line(cts + 3, "response_item", {
+            "type": "function_call_output",
+            "call_id": "call-read",
+            "output": "x" * 400,
+        }),
+        codex_line(cts + 4, "event_msg", {
+            "type": "token_count",
+            "info": {
+                "last_token_usage": {
+                    "input_tokens": 2_000,
+                    "cached_input_tokens": 3_000,
+                    "cache_write_input_tokens": 400,
+                    "output_tokens": 900,
+                    "reasoning_output_tokens": 300,
+                    "total_tokens": 6_300,
+                }
+            },
+        }),
+    ]
+    with open(codex_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(codex_lines) + "\n")
+    codex_snap = codex.load(db_path=codex_root, days=30)
+    ok("codex: session parsed", len(codex_snap.sessions) == 1)
+    codex_rec = codex_snap.sessions[0]
+    ok("codex: usage counters mapped without double-counting reasoning",
+       codex_rec.input_tokens == 2_000 and codex_rec.output_tokens == 600
+       and codex_rec.reasoning_tokens == 300 and codex_rec.total_tokens == 6_300)
+    ok("codex: usage cells keep the full output window",
+       sum(c.output_tokens for c in codex_snap.usage_cells) == 900)
+    ok("codex: tool call/result linked with an estimated result weight",
+       len(codex_snap.events) == 2 and codex_snap.events[0].arg_key == "/repo/README.md"
+       and codex_snap.events[1].name == "read_file" and codex_snap.events[1].tokens == 100)
+    ok("codex: cost basis is honest",
+       analyze(codex_snap).cost_basis == "unknown"
+       and any("not dollars" in w for w in codex_snap.warnings))
     import subprocess
+
+    r_codex = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "codex",
+                              "--db", codex_root, "--json"],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("codex: cli runs end-to-end",
+       r_codex.returncode == 0 and json.loads(r_codex.stdout)["agent"] == "codex")
+    codex_home = tempfile.mkdtemp()
+    auto_dir = os.path.join(codex_home, ".codex", "sessions", "2026", "08", "27")
+    os.makedirs(auto_dir)
+    with open(os.path.join(auto_dir, os.path.basename(codex_path)), "w", encoding="utf-8") as f:
+        f.write("\n".join(codex_lines) + "\n")
+    saved_home = {k: os.environ.get(k) for k in ("HOME", "USERPROFILE")}
+    os.environ["HOME"] = os.environ["USERPROFILE"] = codex_home
+    try:
+        from agentburn.adapters import detect as detect_adapters
+
+        ok("codex: detect finds local sessions", "codex" in detect_adapters())
+    finally:
+        for k, v in saved_home.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    print("multi-agent cli + sentinel:")
 
     env_db = os.path.join(tmp, "state.db")
     r = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "hermes", "--db", env_db,
