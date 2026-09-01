@@ -16,7 +16,7 @@
 
 <br>
 
-**[Claude Code](#supported-agents) · [OpenClaw](#supported-agents) · [Hermes Agent](#supported-agents)** — one normalized core, local, read-only, zero dependencies
+**[Codex CLI](#supported-agents) · [Claude Code](#supported-agents) · [OpenClaw](#supported-agents) · [Hermes Agent](#supported-agents)** — one normalized core, local, read-only, zero dependencies
 
 ```
 uvx agentburn
@@ -173,11 +173,12 @@ One normalized model, one adapter per agent. Run `agentburn` and every agent fou
 
 | Agent | Status | Data source | Notes |
 |---|---|---|---|
+| **Codex CLI** | ✅ | `~/.codex/sessions/**/*.jsonl` | tokens and **windows** from local `token_count` records; no local costs |
 | **Claude Code** | ✅ | `~/.claude/projects/**.jsonl` | tokens and **windows**, by design: no local costs, no honest per-token price for a subscription |
 | **OpenClaw** | ✅ | `~/.openclaw/agents/*/sessions/sessions.json` | **heartbeat is its own category** — the famous one |
 | **Hermes Agent** | ✅ | `~/.hermes/state.db` (+ optional request dumps) | costs from the agent's own accounting |
 
-Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural next targets — PRs welcome.
+Adapters are ~150 lines over a shared model. opencode is a natural next target — PRs welcome.
 
 <div align="center"><img src="assets/architecture.svg" alt="architecture: agent data → adapters → normalized model → report/limits/why/fix/explain/doctor/mcp" width="780"></div>
 
