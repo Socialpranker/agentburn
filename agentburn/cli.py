@@ -77,7 +77,8 @@ RECIPES = """examples:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="agentburn",
-        description="Where does your AI agent burn money? Local profiler, zero deps, nothing leaves your machine.",
+        description="Where does your AI agent burn money or usage? Claude Code, Codex, Gemini CLI, opencode, "
+                    "OpenClaw, Hermes. Local profiler, zero deps, nothing leaves your machine.",
         epilog=RECIPES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -154,6 +155,9 @@ def pick_agents(args) -> list:
             "  looked for: ~/.hermes/state.db (Hermes Agent)\n"
             "              ~/.openclaw/agents/*/sessions/sessions.json (OpenClaw)\n"
             "              ~/.claude/projects/*.jsonl (Claude Code)\n"
+            "              ~/.codex/sessions/**/rollout-*.jsonl (Codex CLI)\n"
+            "              ~/.gemini/tmp/*/chats/session-*.json (Gemini CLI)\n"
+            "              ~/.local/share/opencode/opencode.db (opencode)\n"
             "  pass --agent <name> --db <path> if the data lives elsewhere.",
             file=sys.stderr,
         )

@@ -8,6 +8,7 @@ an upper bound of the saving, never a promise.
 from __future__ import annotations
 
 from .analyze import Analysis
+from .model import agent_key
 
 EXPENSIVE_HINTS = ("opus", "gpt-5", "o3", "sonnet", "pro")
 
@@ -107,8 +108,9 @@ def recommend(a: Analysis) -> list:
         recs.insert(
             0,
             f"{a.zero_token_sessions}/{a.total.sessions} sessions recorded zero tokens despite "
-            "having messages — fix accounting first (check provider usage reporting; "
-            "hermes-agent #12023), otherwise every number here is an undercount.",
+            "having messages — fix accounting first (check provider usage reporting"
+            + ("; hermes-agent #12023" if agent_key(a.agent) == "hermes" else "")
+            + "), otherwise every number here is an undercount.",
         )
 
     return recs[:4]

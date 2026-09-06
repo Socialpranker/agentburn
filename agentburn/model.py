@@ -110,6 +110,21 @@ class LimitHit:
 
 
 @dataclass
+class RateLimitSample:
+    """The provider's own reading of a usage window, as the agent recorded it.
+
+    Codex writes `rate_limits.{primary,secondary}.used_percent` with every
+    token count. Paired with our weighted usage in the same window that is a
+    measured ceiling: weight_in_window / used_percent × 100.
+    """
+
+    ts: float
+    window_minutes: int
+    used_percent: float
+    resets_at: Optional[float] = None
+
+
+@dataclass
 class ContextCall:
     """One API call's context size: what the model had to read before answering.
 
@@ -152,6 +167,9 @@ _AGENT_LABELS = {
     "hermes": "Hermes",
     "openclaw": "OpenClaw",
     "claude-code": "Claude Code",
+    "codex": "Codex CLI",
+    "gemini": "Gemini CLI",
+    "opencode": "opencode",
 }
 
 # Storage the user would name in an upstream bug report, per agent.
@@ -159,6 +177,9 @@ _AGENT_STORES = {
     "hermes": "`~/.hermes/state.db`",
     "openclaw": "the local transcript store",
     "claude-code": "`~/.claude/projects/**.jsonl`",
+    "codex": "`~/.codex/sessions/**/rollout-*.jsonl`",
+    "gemini": "`~/.gemini/tmp/*/chats/session-*.json`",
+    "opencode": "`~/.local/share/opencode/opencode.db`",
 }
 
 
@@ -180,7 +201,7 @@ def agent_store(agent: str) -> str:
 
 @dataclass
 class Snapshot:
-    agent: str  # "hermes" | "openclaw" | "claude-code"
+    agent: str  # "hermes" | "openclaw" | "claude-code" | "codex" | "gemini" | "opencode"
     source_path: str
     generated_at: float
     days: Optional[int]
@@ -204,3 +225,5 @@ class Snapshot:
     context_calls: list = field(default_factory=list)  # ContextCall
     # skill invocations with their measured context cost
     skill_loads: list = field(default_factory=list)  # SkillLoad
+    # the provider's own window readings, when the agent records them
+    rate_limits: list = field(default_factory=list)  # RateLimitSample

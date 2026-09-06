@@ -86,6 +86,7 @@ class LimitsReport:
     minutes_to_wall: Optional[float] = None  # at that pace; None = no ceiling or no pace
     week_peak: Optional[Window] = None  # heaviest rolling 7-day span
     week_ceiling: Optional[float] = None  # measured from a recorded weekly cut-off
+    provider_used: list = field(default_factory=list)  # [(window_minutes, used_percent, ts)] latest reading
     peak_by_project: list = field(default_factory=list)  # [(project, share)]
     unsupported: str = ""  # non-empty when the adapter can't answer this
     notes: list = field(default_factory=list)
@@ -321,6 +322,33 @@ def build_limits(
             rep.ceiling_at = mid[1]
             rep.ceiling_source = "recorded"
             rep.ceiling_hits = len(measured)
+    if not rep.ceiling and snap.rate_limits:
+        # The provider's own percentage next to our weighted usage of the same
+        # window: ceiling = weight / used_percent. One sample is noisy (the
+        # window may have started before our logs); the median of many is not.
+        est = []
+        est_week = []
+        latest: dict = {}
+        for r in sorted(snap.rate_limits, key=lambda r: r.ts):
+            latest[r.window_minutes] = (r.used_percent, r.ts)
+            if r.used_percent < 10:
+                continue
+            w = _window_weight(series, r.ts, r.window_minutes * 60)
+            if w <= 0:
+                continue
+            if abs(r.window_minutes * 60 - span) <= BUCKET_SECONDS:
+                est.append((w / r.used_percent * 100, r.ts))
+            elif r.window_minutes * 60 >= WEEK_SECONDS - BUCKET_SECONDS:
+                est_week.append(w / r.used_percent * 100)
+        rep.provider_used = [(wm, used, ts) for wm, (used, ts) in sorted(latest.items())]
+        if est:
+            est.sort()
+            rep.ceiling = _median([w for w, _ in est])
+            rep.ceiling_at = est[len(est) // 2][1]
+            rep.ceiling_source = "provider"
+            rep.ceiling_hits = len(est)
+        if est_week and not rep.week_ceiling:
+            rep.week_ceiling = _median(est_week)
     if not rep.ceiling and saved:
         rep.ceiling = float(saved["ceiling"])
         rep.ceiling_at = saved.get("ceiling_at")
@@ -446,6 +474,11 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
                 if rep.ceiling_hits > 1
                 else f"the window that ended {_stamp(rep.ceiling_at)}, when Claude Code recorded the cut-off"
             )
+        elif rep.ceiling_source == "provider":
+            how = (
+                f"from {rep.ceiling_hits} readings of the provider's own usage % that "
+                f"{agent_label(rep.agent)} recorded, against your usage in the same windows"
+            )
         elif rep.ceiling_source == "saved":
             how = "saved by an earlier run" + (
                 f" ({_stamp(rep.ceiling_at)})" if rep.ceiling_at else ""
@@ -477,6 +510,11 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
             )
         elif rep.pace <= 0:
             out.append(p.dim(f"   {'TIME TO WALL':<25} {'idle':>10}   nothing in the last {PACE_SECONDS // 60} min"))
+        for wm, used, ts in rep.provider_used:
+            label = f"{wm // 60}h" if wm < 1440 else f"{wm // 1440}d"
+            out.append(
+                p.dim(f"   {'provider says':<25} {used:>9.0f}%   of the {label} window, as of {_stamp(ts)}")
+            )
         if rep.week_ceiling:
             share = rep.week_total / rep.week_ceiling
             txt = f"   {'weekly ceiling':<25} {_fmt(rep.week_ceiling):>10}   this week {share:.0%} of it"
@@ -639,6 +677,7 @@ def limits_json(rep: LimitsReport) -> dict:
             else None
         ),
         "week_ceiling": round(rep.week_ceiling) if rep.week_ceiling else None,
+        "provider_used": [{"window_minutes": wm, "used_percent": u, "ts": ts} for wm, u, ts in rep.provider_used],
         "peak_by_project": [{"project": n, "share": round(v, 4)} for n, v in rep.peak_by_project],
         "tips": _tips(rep),
         "notes": rep.notes,

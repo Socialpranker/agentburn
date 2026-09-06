@@ -30,6 +30,19 @@ PRICES = {
     "qwen/qwen3.6-plus": (0.325, 1.95),
     "stepfun/step-3.5-flash": (0.09, 0.3),
     "z-ai/glm-5-turbo": (1.2, 4.0),
+    # GLM (Z.ai) list prices, USD per 1M, as published 2026-09-01. The Coding
+    # Plan is a subscription: these ratios weigh windows, they are not a bill.
+    "z-ai/glm-4.5": (0.6, 2.2),
+    "z-ai/glm-4.5-air": (0.2, 1.1),
+    "z-ai/glm-4.6": (0.6, 2.2),
+    "z-ai/glm-4.7": (0.6, 2.2),
+    "z-ai/glm-5": (1.0, 3.2),
+    "z-ai/glm-5.1": (1.4, 4.4),
+    "z-ai/glm-5.2": (1.4, 4.4),
+    "z-ai/glm-5.3": (1.4, 4.4),
+    # Gemini list prices (Google AI, standard tier, ≤200k prompt).
+    "google/gemini-2.5-flash": (0.3, 2.5),
+    "google/gemini-2.5-pro": (1.25, 10.0),
 }
 
 CHEAP_REFERENCE = "deepseek/deepseek-chat"
@@ -46,7 +59,7 @@ def _norm(model: str) -> str:
 
 # Agents that talk to one vendor log a bare model id ("claude-opus-5") where
 # routed setups log "anthropic/claude-opus-5". Same model, same price.
-_BARE_PREFIXES = {"claude": "anthropic", "gpt": "openai", "o3": "openai"}
+_BARE_PREFIXES = {"claude": "anthropic", "gpt": "openai", "o3": "openai", "glm": "z-ai", "gemini": "google"}
 
 
 def _with_author(m: str) -> str:
