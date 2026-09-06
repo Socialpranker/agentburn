@@ -21,7 +21,8 @@ import json
 import os
 import time
 
-SCHEMA = 1
+# Bump when the shape of a cached parse changes: an old entry is then a miss.
+SCHEMA = 2
 ENV_OFF = "AGENTBURN_NO_CACHE"
 # Entries whose source file disappeared are swept after this long, so a machine
 # that churns through projects doesn't grow an unbounded cache.
