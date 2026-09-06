@@ -50,7 +50,8 @@ One command, no account, nothing leaves your computer:
 
 ```bash
 uvx agentburn            # where it burns, and what to change
-uvx agentburn limits     # how fast you fill a usage window
+uvx agentburn limits     # how fast you fill a usage window, and how long until the wall
+uvx agentburn context    # what long contexts cost — and what a /clear at 150k would have saved
 ```
 
 ## Two ways agents cost you, two questions
@@ -70,14 +71,76 @@ Optimizing a subscription doesn't change your bill. It changes how far you get b
 
 - **Peak vs typical.** Your worst rolling 5-hour window against the median of your own active ones. The ratio is the finding: a wall is hit by the peak.
 - **What filled it** — by model, by source (you / subagents / scheduled work), and by kind (cache reads vs cache writes vs output).
-- **Measured against your own wall.** Anthropic doesn't publish the formula behind those allowances, so agentburn refuses to invent a threshold. Tell it when you were actually cut off and the arithmetic becomes yours:
+- **Measured against your own wall — automatically.** Anthropic doesn't publish the formula behind those allowances, so agentburn refuses to invent a threshold. But Claude Code writes the cut-off into the transcript itself (*"You've hit your session limit · resets 8:30pm"*), and every one of those moments is a measured ceiling. With several, the ceiling is their median:
 
-  ```bash
-  agentburn limits --hit "2026-08-20 14:30"
-  #   ceiling         38.4M weighted tokens   ← measured from your own cut-off
-  #   peak window       107% of your ceiling
-  #   last 5h            12% of your ceiling
+  ```text
+  YOUR MEASURED CEILING
+  median of 35 cut-offs Claude Code recorded itself
+  ceiling                146M   weighted tokens
+  peak window            137%   of your ceiling
+  last 5h                 16%   of your ceiling
+  TIME TO WALL          2.7 h   at the pace of the last 30 min
   ```
+
+  No cut-off in your logs yet? `--hit "2026-08-20 14:30"` names one by hand. A measured ceiling is remembered in `~/.agentburn/ceiling.json`, so the status line below knows it too.
+- **Time to wall.** Ceiling minus the current window, divided by the pace of the last half hour. The number you actually want while working.
+- **The week, too.** The heaviest rolling 7-day span, how much of it this week already is, and a weekly ceiling when Claude Code recorded a weekly cut-off.
+- **By project.** Sessions record their working directory; the peak window is split by it.
+
+### `agentburn statusline` — the wall, live, inside Claude Code
+
+One line, no colour, built for Claude Code's `statusLine`:
+
+```text
+⏳ 5h 63% · wall in 47 min · week 71%
+```
+
+```json
+{ "statusLine": { "type": "command", "command": "uvx agentburn statusline" } }
+```
+
+Reads only the last three days of logs (the ceiling comes from the state file), so it stays cheap enough to run on every turn.
+
+### `agentburn context` — what a long context costs
+
+Every call re-reads its whole context, and on a subscription that re-reading *is* the window: a turn at 300k costs what three turns at 100k cost. Claude Code records the exact context size of every call, so this is measured, not modelled:
+
+```text
+📏 agentburn context — claude-code · what a long context costs
+
+   CALLS                        156,226   median context 143K · p90 316K · max 704K
+
+   WHERE THE WINDOW GOES, BY CONTEXT SIZE
+   100–200k     ██████············   35%    59,780 calls
+   200–400k     ████████··········   43%    42,420 calls
+   >400k        ██················   11%     7,257 calls
+
+   IF YOU HAD RESTARTED AT…
+   /clear at 100K     →   41% of the window not spent   (108,573 calls were past it)
+   /clear at 150K     →   26% of the window not spent   (73,600 calls were past it)
+
+   WHAT A SKILL COSTS
+   handoff                                 7.96K per load ×  226 =     1.8M
+   claude-api                              33.6K per load ×   14 =     470K
+```
+
+- **The `/clear` arithmetic** — the part of every call's context above a threshold, at the cache-read rate: the honest saving of a restart habit, assuming the same work in shorter sessions.
+- **Skill costs, measured** — the context growth right after a lone `Skill` call, median of recent loads. Bundled skills never touch the disk; the transcript sees all of them.
+- **By effort level** — how much of the window each `effort` setting took.
+- Findings with a lever land in `agentburn fix`: the restart threshold, and the heavy skills.
+
+### `agentburn commits` — what a commit cost you
+
+Sessions record their working directory and branch; your repositories record when each commit landed. The usage between two consecutive commits is what the second one cost — read-only `git log`, nothing written:
+
+```text
+   COSTLIEST COMMITS
+       124M   33_Thoforge        1f7a31a1  Aug 30  fix(ui): правки UX-аудита — раскладка, навигация
+      81.2M   33_Thoforge        ad19bff7  Aug 28  feat(ui): цель над деревом и развилка в карточке
+
+   BY REPOSITORY
+   33_Thoforge                 1.95M median ·  287 commits ·    1.52B total
+```
 
 Weighted tokens = tokens × *published* price ratios (cache read 0.1×, cache write 1.25×, output per model), normalized to one input token of the reference model. Every ratio is public; none of them is a guess about how the provider counts.
 
@@ -111,7 +174,7 @@ Not "consider a cheaper model" but the exact file and the exact lines. Patch gen
 
 | Agent | Verified levers |
 |---|---|
-| Claude Code | registered MCP servers (`~/.claude.json`, `.mcp.json`), always-loaded `CLAUDE.md` memory files |
+| Claude Code | registered MCP servers (`~/.claude.json`, `.mcp.json`), always-loaded `CLAUDE.md` memory files, the session-restart threshold (measured), heavy skills (measured per load) |
 | Hermes | per-job `model` / `enabled_toolsets` (`cron/jobs.py`), per-platform toolsets (`gateway/run.py`) |
 | OpenClaw | `heartbeat.{every, activeHours, model, lightContext}` (`config/types.agent-defaults.ts`) |
 
@@ -122,6 +185,7 @@ There is no `--apply` on purpose: it's your agent's config. Paste it yourself, t
 Token trackers quietly disagree with each other (2–91× in public issue threads). agentburn takes the opposite stance:
 
 - Numbers come from **the agent's own accounting**, read-only. No scraping, no proxies, no guessing.
+- **One reply is counted once.** Claude Code writes one transcript line per content block, each carrying the same `usage`; summing lines inflates calls and tokens ~1.8×. agentburn deduplicates by `requestId` (found and fixed in 0.14.0 — earlier absolute totals from this tool were inflated by that factor; ratios were not).
 - Provider-billed costs are shown as-is; estimates are marked `~`; mixed data is labeled mixed.
 - **Where a price doesn't exist, none is invented.** Claude Code records no costs and subscription usage has no honest per-token price — so that adapter reports tokens and windows, never dollars.
 - Sessions with messages but **zero recorded tokens** (known accounting gaps, e.g. [hermes-agent #12023](https://github.com/NousResearch/hermes-agent/issues/12023)) are detected: totals become an explicit **lower bound**, and fixing the accounting becomes recommendation #1.
@@ -158,6 +222,9 @@ Always-on agents bill you around the clock — and their built-in counters only 
 |  | **agentburn** | ccusage | codeburn | built-in `/usage` |
 |---|---|---|---|---|
 | Usage **windows** (peak vs typical, what filled them) | ✅ | — | — | current window only |
+| Ceiling measured from your own recorded cut-offs · time to wall · status line | ✅ | — | — | current window % |
+| The price of long contexts · what a `/clear` would have saved · skill cost per load | ✅ | — | — | — |
+| Cost per git commit | ✅ | — | — | — |
 | Burn by *source* (cron · heartbeat · gateways · subagents) | ✅ | — | — | % only, 7 days |
 | 🌙 the overnight bill, isolated | ✅ | — | — | — |
 | Behavioral forensics (`why`: loops, retry storms, failed-run cost) | ✅ | — | — | — |
@@ -186,7 +253,7 @@ Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural ne
 <details>
 <summary><b>🔌 <code>agentburn mcp</code> — your agent answers for its own bill</b></summary>
 
-A zero-dependency MCP stdio server exposing `burn_report` / `burn_limits` / `burn_why` / `burn_card`. Register it and ask *"where do you burn my money?"* — it profiles its own database and explains.
+A zero-dependency MCP stdio server exposing `burn_report` / `burn_limits` / `burn_context` / `burn_commits` / `burn_why` / `burn_card`. Register it and ask *"where do you burn my money?"* — it profiles its own database and explains.
 
 ```bash
 claude mcp add agentburn -- agentburn mcp

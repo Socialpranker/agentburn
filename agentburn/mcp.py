@@ -68,6 +68,24 @@ TOOLS = [
         "inputSchema": WINDOW,
     },
     {
+        "name": "burn_context",
+        "description": (
+            "The price of long contexts on this machine: share of the usage window spent at "
+            "each context size, what a /clear at 100k/150k/200k/300k would have saved, the "
+            "longest sessions, usage by effort level, and what each skill costs per load "
+            "(measured from context growth). Returns JSON."
+        ),
+        "inputSchema": WINDOW,
+    },
+    {
+        "name": "burn_commits",
+        "description": (
+            "What each git commit cost, in weighted tokens: sessions joined to the repositories "
+            "they ran in (read-only git log). Costliest commits, median per repository. Returns JSON."
+        ),
+        "inputSchema": WINDOW,
+    },
+    {
         "name": "burn_card",
         "description": "Anonymized shareable burn summary (plain text, safe to post).",
         "inputSchema": WINDOW,
@@ -106,6 +124,18 @@ def _call(name: str, args: dict) -> str:
         from .limits import build_limits, limits_json
 
         return json.dumps(limits_json(build_limits(snap)), indent=2, ensure_ascii=False)
+    if name == "burn_context":
+        from .context import build_context, context_json
+
+        return json.dumps(context_json(build_context(snap)), indent=2, ensure_ascii=False)
+    if name == "burn_commits":
+        import time as _time
+
+        from .commits import build_commits, commits_json
+
+        days = (args or {}).get("days", 30)
+        since = _time.time() - days * 86400 if days else None
+        return json.dumps(commits_json(build_commits(snap, since=since)), indent=2, ensure_ascii=False)
     if name == "burn_card":
         from .share import share_text
 

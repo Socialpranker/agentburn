@@ -658,9 +658,9 @@ def main():
     lines = [json.loads(l) for l in r_mcp.stdout.strip().splitlines()]
     byid = {l.get("id"): l for l in lines}
     ok("mcp: initialize → serverInfo", byid[1]["result"]["serverInfo"]["name"] == "agentburn")
-    ok("mcp: tools/list → 4 tools",
+    ok("mcp: tools/list → 6 tools",
        {t["name"] for t in byid[2]["result"]["tools"]}
-       == {"burn_report", "burn_why", "burn_limits", "burn_card"})
+       == {"burn_report", "burn_why", "burn_limits", "burn_card", "burn_context", "burn_commits"})
     body0 = json.loads(byid[3]["result"]["content"][0]["text"])
     ok("mcp: tools/call burn_report returns the report JSON",
        byid[3]["result"]["isError"] is False and body0["agentburn"] == 1 and body0["total"]["sessions"] > 0)
@@ -1072,6 +1072,158 @@ def main():
     svg = share_svg(a_cc, lim)
     ok("card svg: same window line", "peak" in svg and svg.startswith("<svg"))
     ok("card svg: source bars rendered without prices", "where it burns" in svg)
+
+
+    # ------------------------------------------------ dedup / hits / context
+    # One model reply = several transcript lines (one per content block), all
+    # carrying the SAME usage. Summing rows inflated calls and tokens ~1.8×.
+    print("claude-code: requestId dedup, recorded cut-offs, context, skills, commits:")
+    from agentburn.context import build_context, context_json, render_context  # noqa: E402
+    from agentburn.limits import statusline, load_saved_ceiling, save_ceiling  # noqa: E402
+
+    dd_root = os.path.join(tempfile.mkdtemp(), "projects")
+    dd_proj = os.path.join(dd_root, "-tmp-dedup")
+    os.makedirs(dd_proj)
+    t0 = now - 4 * 3600
+    repo_dir = tempfile.mkdtemp()
+
+    def row(ts, req, blocks, usage, model="claude-sonnet-5", effort=None, cwd=repo_dir):
+        d = {"type": "assistant", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z",
+             "requestId": req, "cwd": cwd, "gitBranch": "main",
+             "message": {"model": model, "content": blocks, "usage": usage}}
+        if effort:
+            d["effort"] = effort
+        return json.dumps(d)
+
+    u1 = {"input_tokens": 1000, "output_tokens": 100, "cache_read_input_tokens": 50_000, "cache_creation_input_tokens": 0}
+    u2 = {"input_tokens": 1000, "output_tokens": 100, "cache_read_input_tokens": 60_000, "cache_creation_input_tokens": 0}
+    u3 = {"input_tokens": 0, "output_tokens": 50, "cache_read_input_tokens": 250_000, "cache_creation_input_tokens": 0}
+    lines = [
+        # reply 1: thinking + text + tool_use Skill → three rows, one usage
+        row(t0, "req-1", [{"type": "thinking", "thinking": "…"}], u1, effort="high"),
+        row(t0, "req-1", [{"type": "text", "text": "hi"}], u1, effort="high"),
+        row(t0, "req-1", [{"type": "tool_use", "id": "tu1", "name": "Skill", "input": {"skill": "deploy-verify"}}], u1, effort="high"),
+        # reply 2: context grew by 10k after the lone Skill call
+        row(t0 + 60, "req-2", [{"type": "text", "text": "ok"}], u2, effort="high"),
+        # reply 3: a long-context call
+        # a bucket is 300 s wide: keep the long call a full bucket away from the first commit
+        row(t0 + 1200, "req-3", [{"type": "text", "text": "…"}], u3, model="claude-opus-5", effort="max"),
+        # the cut-off Claude Code writes itself: zero usage, must not count as a call
+        json.dumps({"type": "assistant", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t0 + 1260)) + "Z",
+                    "isApiErrorMessage": True, "requestId": "req-4",
+                    "message": {"model": "<synthetic>", "usage": {"input_tokens": 0, "output_tokens": 0},
+                                "content": [{"type": "text", "text": "You've hit your session limit · resets 8:30pm (Europe/Amsterdam)"}]}}),
+    ]
+    with open(os.path.join(dd_proj, "22222222-2222-4222-8222-222222222222.jsonl"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    dd = cc.load(db_path=dd_root, days=30, now=now)
+    rec = dd.sessions[0]
+    ok("dedup: three rows of one reply count as ONE call", rec.api_calls == 3, str(rec.api_calls))
+    ok("dedup: usage summed once per requestId",
+       rec.cache_read_tokens == 360_000 and rec.input_tokens == 2000, str(rec.cache_read_tokens))
+    ok("dedup: synthetic cut-off row is not an API call", all(c.model != "<synthetic>" for c in dd.usage_cells))
+    ok("dedup: cells agree with the session total",
+       sum(c.cache_read_tokens for c in dd.usage_cells) == rec.cache_read_tokens)
+    ok("adapter: cwd and branch recorded on the session", rec.project == repo_dir and rec.branch == "main")
+    ok("adapter: title uses the recorded working directory",
+       rec.title.startswith(os.path.basename(repo_dir)))
+    ok("hits: the recorded cut-off is a LimitHit with kind + reset",
+       len(dd.limit_hits) == 1 and dd.limit_hits[0].kind == "session"
+       and abs(dd.limit_hits[0].ts - (t0 + 1260)) < 1)
+    ok("hits: warning names the recorded cut-off", any("cut-off" in w for w in dd.warnings))
+    lim_auto = build_limits(dd, now=now)
+    ok("limits: ceiling measured from the recorded cut-off, no --hit needed",
+       lim_auto.ceiling is not None and lim_auto.ceiling > 0 and lim_auto.ceiling_source == "recorded")
+    ok("limits: week peak found", lim_auto.week_peak is not None and lim_auto.week_peak.weight > 0)
+    ok("limits: peak split by project uses the recorded cwd",
+       lim_auto.peak_by_project and lim_auto.peak_by_project[0][0] == os.path.basename(repo_dir))
+    ok("limits: --hit by hand still wins over the recorded one",
+       build_limits(dd, hit=t0 + 1230, now=now).ceiling_source == "--hit")
+    r_auto = render_limits(lim_auto, color=False)
+    ok("limits render: says the cut-off was recorded by Claude Code", "recorded" in r_auto)
+    ok("limits render: time to wall line present", "TIME TO WALL" in r_auto)
+    lim_busy = build_limits(dd, now=t0 + 1300)
+    ok("limits: pace over the last 30 min gives minutes to wall",
+       lim_busy.pace > 0 and lim_busy.minutes_to_wall is not None)
+    sl = statusline(lim_busy)
+    ok("statusline: one line, percent of ceiling, no ANSI",
+       "\n" not in sl and "%" in sl and "\033" not in sl, sl)
+    state = os.path.join(tempfile.mkdtemp(), "ceiling.json")
+    save_ceiling("claude-code", lim_auto, path=state)
+    saved = load_saved_ceiling("claude-code", path=state)
+    ok("ceiling state: saved and reloaded", saved is not None and saved["ceiling"] == round(lim_auto.ceiling))
+    dd_nohit = cc.load(db_path=dd_root, days=30, now=now)
+    dd_nohit.limit_hits = []
+    lim_saved = build_limits(dd_nohit, now=now, saved=saved)
+    ok("ceiling state: a run without cut-offs falls back to the saved ceiling",
+       lim_saved.ceiling_source == "saved" and lim_saved.ceiling == float(saved["ceiling"]))
+    ok("statusline: no ceiling → says so instead of inventing one",
+       "no ceiling" in statusline(build_limits(dd_nohit, now=now)))
+    ok("limits json: new fields", "minutes_to_wall" in limits_json(lim_busy) and "week_peak" in limits_json(lim_busy))
+
+    ctx = build_context(dd)
+    ok("context: one record per deduplicated call", ctx.calls == 3)
+    ok("context: max context is the long call", ctx.max_context == 250_000)
+    ok("context: saving at 200k counts the one call past it",
+       any(sv.threshold == 200_000 and sv.calls_over == 1 and sv.share > 0 for sv in ctx.savings))
+    ok("context: effort levels split", {e for e, _, _ in ctx.by_effort} == {"high", "max"})
+    ok("context: skill cost measured from the growth after a lone Skill call",
+       len(ctx.skills) == 1 and ctx.skills[0].skill == "deploy-verify" and ctx.skills[0].tokens == 10_000,
+       str([(s_.skill, s_.tokens) for s_ in ctx.skills]))
+    r_ctx = render_context(ctx, color=False)
+    ok("context render: bands, savings, skills", "BY CONTEXT SIZE" in r_ctx and "/clear at" in r_ctx and "deploy-verify" in r_ctx)
+    ok("context json: shape", context_json(ctx)["skills"][0]["tokens_per_load"] == 10_000)
+    ok("context: adapters without per-call usage say so",
+       bool(build_context(hermes.load(db_path=env_db, days=30)).unsupported))
+    r_ctx_cli = subprocess.run([sys.executable, "-m", "agentburn.cli", "context", "--agent", "claude-code",
+                                "--db", dd_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli context: end-to-end", r_ctx_cli.returncode == 0 and "WHERE THE WINDOW GOES" in r_ctx_cli.stdout, r_ctx_cli.stderr[-300:])
+    r_sl = subprocess.run([sys.executable, "-m", "agentburn.cli", "statusline", "--agent", "claude-code",
+                           "--db", dd_root], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli statusline: one line", r_sl.returncode == 0 and r_sl.stdout.count("\n") == 1 and "⏳" in r_sl.stdout, r_sl.stdout)
+
+    # fix: the /clear lever and heavy skills come from the same measurements
+    from agentburn.fix import build_fixes as _bf  # noqa: E402
+    a_dd = analyze(dd)
+    dd_heavy = cc.load(db_path=dd_root, days=30, now=now)
+    from agentburn.model import SkillLoad  # noqa: E402
+    dd_heavy.skill_loads += [SkillLoad(session="s", ts=now, skill="fat-skill", tokens=20_000) for _ in range(3)]
+    fx = _bf("claude-code", dd_root, a_dd, None, dd_heavy)
+    fx_titles = " | ".join(p_.title for p_ in fx)
+    ok("fix: /clear lever proposed from measured context", "Restart sessions" in fx_titles, fx_titles)
+    ok("fix: heavy skill flagged with its measured size", "fat-skill" in " ".join(p_.why for p_ in fx), fx_titles)
+
+    # commits: join sessions to the repository's git log
+    from agentburn.commits import build_commits, render_commits, commits_json  # noqa: E402
+    git_env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                   GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_NOSYSTEM="1")
+    have_git = subprocess.run(["git", "--version"], capture_output=True).returncode == 0
+    if have_git:
+        subprocess.run(["git", "init", "-q", repo_dir], check=True, env=git_env)
+        def commit(msg, ts):
+            with open(os.path.join(repo_dir, "f.txt"), "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+            subprocess.run(["git", "-C", repo_dir, "add", "f.txt"], check=True, env=git_env)
+            stamp = str(int(ts))
+            subprocess.run(["git", "-C", repo_dir, "commit", "-q", "-m", msg], check=True,
+                           env=dict(git_env, GIT_AUTHOR_DATE=stamp, GIT_COMMITTER_DATE=stamp))
+        commit("first", t0 + 600)     # after req-1/req-2 (t0, t0+60) → costs those
+        commit("second", t0 + 1800)   # after req-3 (t0+1200) → costs that one
+        cm = build_commits(dd, since=now - 30 * 86400)
+        ok("commits: both commits priced", len(cm.top) == 2, str([(c.subject, c.weight) for c in cm.top]))
+        first = next(c for c in cm.top if c.subject == "first")
+        second = next(c for c in cm.top if c.subject == "second")
+        ok("commits: the long-context call lands on the commit that followed it",
+           second.weight > first.weight and second.calls == 1 and first.calls == 2)
+        ok("commits: everything attributed", abs(commits_json(cm)["attributed_share"] - 1.0) < 1e-6)
+        ok("commits render", "COSTLIEST COMMITS" in render_commits(cm, color=False) and "second" in render_commits(cm, color=False))
+        dd_norepo = cc.load(db_path=dd_root, days=30, now=now)
+        dd_norepo.sessions[0].project = tempfile.mkdtemp()
+        ok("commits: a session outside any repo is skipped with a reason",
+           any("not a git" in why for _, why in build_commits(dd_norepo, since=None).skipped))
+    else:
+        print("  (git not found — commits checks skipped)")
+    ok("commits: adapters without cwd say so", bool(build_commits(hermes.load(db_path=env_db, days=30)).unsupported))
 
     # ------------------------------------------------- fix for claude code
     print("fix (claude-code levers):")

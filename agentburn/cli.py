@@ -56,7 +56,10 @@ RECIPES = """examples:
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn limits                   subscription plans bill windows, not dollars: how fast you fill one
-  agentburn limits --hit "2026-08-20 14:30"   calibrate against the window where you actually got cut off
+  agentburn limits --hit "2026-08-20 14:30"   calibrate by hand (Claude Code's own cut-off records are used automatically)
+  agentburn context                  the price of long contexts: what a /clear at 150k would have saved, what a skill costs
+  agentburn commits                  what each commit cost you — sessions joined to your repositories' git log
+  agentburn statusline               one line for Claude Code's statusLine: window fill %, time to wall
   agentburn drift                    your model spend × world usage trend — are you paying for a dying model?
   agentburn rank                     you vs the community Burn Index (efficiency percentiles)
   agentburn --submit                 join the index: anonymized payload + a link YOU click
@@ -79,9 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("command", nargs="?",
-                    choices=["report", "doctor", "why", "limits", "explain", "mcp", "fix", "drift", "rank"],
+                    choices=["report", "doctor", "why", "limits", "context", "commits", "statusline",
+                             "explain", "mcp", "fix", "drift", "rank"],
                     default="report",
                     help="report (default) · why (forensics) · limits (subscription windows) · "
+                         "context (price of long contexts, skill costs) · commits (cost per commit) · "
+                         "statusline (one line for an editor status bar) · "
                          "drift (spend × world trend) · rank (you vs the Burn Index) · "
                          "fix (config patches) · explain (LLM) · doctor (accounting health) · mcp")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
@@ -226,6 +232,10 @@ def main(argv=None) -> int:
         args.days = 1
     elif args.week:
         args.days = 7
+    elif args.command == "statusline" and args.days == 30:
+        # Runs on every turn of the editor: read the last few days only. The
+        # ceiling comes from the state file `limits` keeps, not from history.
+        args.days = 3
     color = sys.stdout.isatty() and not args.no_color and _ansi_ok()
 
     single_modes = (args.command in ("doctor", "explain", "fix")
@@ -349,15 +359,21 @@ def main(argv=None) -> int:
             print()
             return 0
 
-        if args.command == "limits":
-            from .limits import build_limits, limits_json, render_limits
+        if args.command in ("limits", "statusline"):
+            from .limits import (build_limits, limits_json, load_saved_ceiling, render_limits,
+                                 save_ceiling, statusline)
 
-            reports = [
-                build_limits(
-                    load(n), hit=args.hit, window_hours=args.window or 5.0
+            reports = []
+            for n in found:
+                rep = build_limits(
+                    load(n), hit=args.hit, window_hours=args.window or 5.0,
+                    saved=load_saved_ceiling(n),
                 )
-                for n in found
-            ]
+                save_ceiling(n, rep)
+                reports.append(rep)
+            if args.command == "statusline":
+                print(statusline(reports[0]))
+                return 0
             if args.json:
                 import json as _json
 
@@ -367,6 +383,39 @@ def main(argv=None) -> int:
             else:
                 for r in reports:
                     print(render_limits(r, color=color))
+            return 0
+
+        if args.command == "context":
+            from .context import build_context, context_json, render_context
+
+            reports = [build_context(load(n)) for n in found]
+            if args.json:
+                import json as _json
+
+                payloads = [context_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_context(r, color=color))
+            return 0
+
+        if args.command == "commits":
+            import time as _time
+
+            from .commits import build_commits, commits_json, render_commits
+
+            since = _time.time() - args.days * 86400 if args.days else None
+            reports = [build_commits(load(n), since=since) for n in found]
+            if args.json:
+                import json as _json
+
+                payloads = [commits_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_commits(r, color=color))
             return 0
 
         if args.command == "why":
@@ -468,6 +517,10 @@ def _next_hints(args, color: bool, subscription: bool = False) -> None:
         hints.insert(
             0,
             "agentburn limits         → how fast you fill a 5-hour window (what a subscription actually bills)",
+        )
+        hints.insert(
+            1,
+            "agentburn context        → what long contexts cost, what a /clear at 150k would have saved",
         )
     if not os.path.exists(args.baseline_file or baseline.DEFAULT_PATH):
         hints.append("agentburn --save-baseline → snapshot now, prove your savings after you optimize")
