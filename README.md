@@ -83,7 +83,7 @@ Optimizing a subscription doesn't change your bill. It changes how far you get b
   ```
 
   No cut-off in your logs yet? `--hit "2026-08-20 14:30"` names one by hand. A measured ceiling is remembered in `~/.agentburn/ceiling.json`, so the status line below knows it too.
-- **Codex: the provider's own reading.** Codex CLI writes `rate_limits.used_percent` next to every request. agentburn pairs each reading with your weighted usage of the same window and takes the median — a ceiling from the provider's arithmetic, not from a cut-off. Treat it as an estimate: that percentage counts every device and app on the account, while your local rollouts are only part of it.
+- **Codex: the provider's own reading.** Codex CLI writes `rate_limits.used_percent` next to every request. agentburn pairs each reading with your weighted usage of the same window and takes the median — a ceiling from the provider's arithmetic, not from a cut-off. Treat it as an estimate: that percentage counts every device and app on the account, while your local rollouts are only part of it — and when Codex stops reporting a window (plan or client change), a later peak is flagged as measured on earlier windows, not sold as an overrun.
 - **Time to wall.** Ceiling minus the current window, divided by the pace of the last half hour. The number you actually want while working.
 - **The week, too.** The heaviest rolling 7-day span, how much of it this week already is, and a weekly ceiling when Claude Code recorded a weekly cut-off.
 - **By project.** Sessions record their working directory; the peak window is split by it.

@@ -1303,8 +1303,23 @@ def main():
     ok("codex limits: latest provider reading per window",
        [(wm, u) for wm, u, _ in lim_cx.provider_used] == [(300, 60.0), (10080, 12.0)], str(lim_cx.provider_used))
     ok("codex limits render: provider line", "provider says" in render_limits(lim_cx, color=False))
-    ok("codex: ~ only 5h window makes the ceiling; week from the weekly window",
-       lim_cx.week_ceiling is not None and lim_cx.week_ceiling > 0)
+    ok("codex limits: week ceiling from the weekly window", lim_cx.week_ceiling is not None and lim_cx.week_ceiling > 0)
+    ok("codex limits: peak inside the readings' coverage → no staleness note", not lim_cx.notes, str(lim_cx.notes))
+    # readings stop, then a bigger peak happens: the ratio must be flagged, not sold as an overrun
+    from agentburn.model import RateLimitSample as _RLS, UsageCell as _UC  # noqa: E402
+    cx_stale = codex.load(db_path=cx_root, days=30, now=now)
+    cx_stale.usage_cells.append(_UC(start=int((cx_t0 + 7 * 3600) // 300) * 300, source="desktop", model="gpt-5.5",
+                                    calls=5, input_tokens=900_000, output_tokens=50_000, cache_read_tokens=0,
+                                    cache_write_tokens=0, session="later"))
+    lim_stale = build_limits(cx_stale, now=now)
+    ok("codex limits: peak after the last 5h reading is flagged as unmeasured",
+       lim_stale.ceiling_source == "provider" and any("last 5h reading" in n_ for n_ in lim_stale.notes), str(lim_stale.notes))
+    # a 30-day reading is not a weekly ceiling
+    cx_30d = codex.load(db_path=cx_root, days=30, now=now)
+    cx_30d.rate_limits = [r for r in cx_30d.rate_limits if r.window_minutes == 300]
+    cx_30d.rate_limits.append(_RLS(ts=cx_t0 + 800, window_minutes=43_200, used_percent=90.0, resets_at=None))
+    ok("codex limits: a 30-day reading does not become the weekly ceiling",
+       build_limits(cx_30d, now=now).week_ceiling is None)
     try:
         codex.load(db_path=cx_root, days=1, now=now + 10 * 86400)
         ok("codex: empty window raises", False)

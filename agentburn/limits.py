@@ -329,16 +329,21 @@ def build_limits(
         est = []
         est_week = []
         latest: dict = {}
+        last_span_reading = None
         for r in sorted(snap.rate_limits, key=lambda r: r.ts):
             latest[r.window_minutes] = (r.used_percent, r.ts)
+            same_span = abs(r.window_minutes * 60 - span) <= BUCKET_SECONDS
+            if same_span:
+                last_span_reading = r.ts
             if r.used_percent < 10:
                 continue
             w = _window_weight(series, r.ts, r.window_minutes * 60)
             if w <= 0:
                 continue
-            if abs(r.window_minutes * 60 - span) <= BUCKET_SECONDS:
+            if same_span:
                 est.append((w / r.used_percent * 100, r.ts))
-            elif r.window_minutes * 60 >= WEEK_SECONDS - BUCKET_SECONDS:
+            elif abs(r.window_minutes * 60 - WEEK_SECONDS) <= BUCKET_SECONDS:
+                # exactly the week: a 30-day reading is not a weekly ceiling
                 est_week.append(w / r.used_percent * 100)
         rep.provider_used = [(wm, used, ts) for wm, (used, ts) in sorted(latest.items())]
         if est:
@@ -347,6 +352,15 @@ def build_limits(
             rep.ceiling_at = est[len(est) // 2][1]
             rep.ceiling_source = "provider"
             rep.ceiling_hits = len(est)
+            # The provider may stop reporting this window (plan change, client
+            # update): a peak that fell after the last reading was never
+            # measured against this ceiling, and the ratio would be a guess.
+            if rep.peak and last_span_reading is not None and rep.peak.end > last_span_reading + span:
+                rep.notes.append(
+                    f"the peak window fell after the provider's last {window_hours:g}h reading "
+                    f"({_stamp(last_span_reading)}) — the ceiling is measured on earlier windows only; "
+                    "the % above is a comparison across periods, not a measured overrun."
+                )
         if est_week and not rep.week_ceiling:
             rep.week_ceiling = _median(est_week)
     if not rep.ceiling and saved:
