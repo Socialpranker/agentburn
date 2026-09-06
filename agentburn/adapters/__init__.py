@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from . import claude_code, hermes, openclaw
+from . import claude_code, codex, gemini, hermes, openclaw, opencode
 
 ADAPTERS = {
     "hermes": hermes,
     "openclaw": openclaw,
     "claude-code": claude_code,
+    "codex": codex,
+    "gemini": gemini,
+    "opencode": opencode,
 }
 
 

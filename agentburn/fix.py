@@ -11,8 +11,10 @@ source code (June 2026):
 - OpenClaw: `agents.defaults.heartbeat.{every, activeHours, model, lightContext}`
   in ~/.openclaw/openclaw.json (config/types.agent-defaults.ts).
 - Claude Code: registered MCP servers in ~/.claude.json / .mcp.json (documented
-  scopes; `claude mcp list|remove`) and the always-loaded CLAUDE.md memory
-  files. Both are levers the user owns; neither is a guess about pricing.
+  scopes; `claude mcp list|remove`), the always-loaded CLAUDE.md memory
+  files, skills whose measured load cost dominates (skill files the user
+  owns), and the session length itself (`/clear` is a documented command).
+  All levers the user owns; none is a guess about pricing.
 Findings with no verified lever stay recommendations, not patches.
 """
 
@@ -171,6 +173,63 @@ def _claude_code_fixes(a: Analysis, snap) -> list:
                 ],
             )
         )
+    if snap is not None and getattr(snap, "context_calls", None):
+        from .context import build_context
+
+        ctx = build_context(snap)
+        best = max(ctx.savings, key=lambda sv: sv.share) if ctx.savings else None
+        if best and best.share >= 0.15:
+            # The lowest threshold that keeps most of the best saving: cheaper
+            # to follow than the one with the absolute maximum.
+            pick = next((sv for sv in ctx.savings if sv.share >= best.share * 0.8), best)
+            patches.append(
+                Patch(
+                    title=f"Restart sessions at ~{fmt_tokens(pick.threshold)} context (/clear)",
+                    target="(a habit, not a file — `/clear`, or a handoff note + new session)",
+                    target_exists=True,
+                    why=(
+                        f"{pick.calls_over:,} calls in this window ran past {fmt_tokens(pick.threshold)} "
+                        f"of context; every call re-reads all of it. Median context {fmt_tokens(ctx.median_context)}, "
+                        f"p90 {fmt_tokens(ctx.p90_context)}."
+                    ),
+                    impact=(
+                        f"≈{pick.share:.0%} of the weighted window not spent, assuming the same work "
+                        "in shorter sessions (see `agentburn context`)"
+                    ),
+                    proposed=(
+                        f"when the context passes ~{fmt_tokens(pick.threshold)}: write a short handoff, /clear, continue.\n"
+                        "long tasks → a plan file + one session per stage."
+                    ),
+                    notes=[
+                        "measured from Claude Code's own per-call usage, not modelled",
+                        "a restart costs one bootstrap (memory files + tool definitions); the estimate ignores that",
+                    ],
+                )
+            )
+        heavy = [sc for sc in ctx.skills if sc.tokens >= 8_000 and sc.calls >= 2]
+        if heavy:
+            total = sum(sc.total for sc in heavy)
+            patches.append(
+                Patch(
+                    title=f"Put {len(heavy)} heavy skill(s) on a diet ({fmt_tokens(total)} loaded in this window)",
+                    target=os.path.join(os.path.expanduser("~"), ".claude", "skills"),
+                    target_exists=os.path.isdir(os.path.join(os.path.expanduser("~"), ".claude", "skills")),
+                    why=(
+                        "each load adds this much context, measured as the growth right after the call: "
+                        + ", ".join(f"{sc.skill} {fmt_tokens(sc.tokens)}×{sc.calls}" for sc in heavy[:5])
+                    ),
+                    impact="every trimmed line is paid back on every load, for the rest of the session too",
+                    current="\n".join(f"{sc.skill:<36} {sc.tokens:>8,} tokens per load" for sc in heavy[:5]),
+                    proposed=(
+                        "keep the instructions that change what the agent does; move examples, catalogues "
+                        "and reference tables into files the skill reads on demand"
+                    ),
+                    notes=[
+                        "bundled skills (not on disk) are measured the same way but can only be avoided, not trimmed",
+                        "prove it: agentburn context → trim → agentburn context",
+                    ],
+                )
+            )
     return patches
 
 

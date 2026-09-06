@@ -12,7 +12,7 @@ from __future__ import annotations
 import time
 from collections import Counter
 
-from .model import Snapshot, agent_key, agent_label, agent_store
+from .model import Snapshot, agent_key, agent_label, agent_store, records_costs
 
 # Upstream issue describing zero-usage streams, per agent. Only cite it where it
 # actually applies — pointing a Claude Code user at the Hermes tracker sends the
@@ -27,12 +27,13 @@ def diagnose(snap: Snapshot) -> dict:
     zero_groups = Counter()
     unpriced_groups = Counter()
     zero_total = unpriced_total = 0
+    priced_agent = records_costs(snap.agent)
     for s in snap.sessions:
         key = (s.provider or "unknown-provider", s.model or "unknown-model", s.source)
         if s.message_count > 0 and s.total_tokens == 0:
             zero_groups[key] += 1
             zero_total += 1
-        if s.total_tokens > 0 and s.cost_usd is None:
+        if priced_agent and s.total_tokens > 0 and s.cost_usd is None:
             unpriced_groups[key] += 1
             unpriced_total += 1
     return {
@@ -41,6 +42,7 @@ def diagnose(snap: Snapshot) -> dict:
         "zero_groups": zero_groups.most_common(8),
         "unpriced_total": unpriced_total,
         "unpriced_groups": unpriced_groups.most_common(8),
+        "no_local_costs": not priced_agent,
     }
 
 
@@ -57,9 +59,12 @@ def render_doctor(snap: Snapshot, color: bool = True) -> str:
     out.append(
         f"   zero-usage sessions: {d['zero_total']} (messages exist, tokens recorded = 0)"
     )
-    out.append(
-        f"   unpriced sessions  : {d['unpriced_total']} (tokens exist, no cost recorded)"
-    )
+    if d["no_local_costs"]:
+        out.append(f"   unpriced sessions  : n/a ({agent_label(snap.agent)} records no prices — tokens only, by design)")
+    else:
+        out.append(
+            f"   unpriced sessions  : {d['unpriced_total']} (tokens exist, no cost recorded)"
+        )
     out.append("")
 
     if d["zero_total"] == 0 and d["unpriced_total"] == 0:

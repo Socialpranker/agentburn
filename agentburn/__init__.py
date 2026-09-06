@@ -7,4 +7,4 @@ Honest methodology: numbers come from the agent's own accounting, gaps are
 surfaced rather than hidden, and no price is invented where none exists.
 """
 
-__version__ = "0.13.3"
+__version__ = "0.14.0"

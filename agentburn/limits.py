@@ -11,10 +11,16 @@ does not invent a threshold. It does two honest things instead:
    statement about how much more one token costs than another — and sums them
    over rolling windows. That makes YOUR windows comparable with each other:
    the peak, the typical one, the one running right now.
-2. If you tell it when you were actually cut off (`--hit "2026-08-20 14:30"`),
-   the window that ended at that moment becomes a *measured* ceiling, and
-   everything else is reported as a percentage of it. That number is yours,
-   from your own wall, not a guess about the provider's arithmetic.
+2. When you were actually cut off — Claude Code writes that moment into the
+   transcript itself ("You've hit your session limit · resets 8:30pm"), and
+   `--hit "2026-08-20 14:30"` lets you name one by hand — the window that
+   ended at that moment becomes a *measured* ceiling, and everything else is
+   reported as a percentage of it. That number is yours, from your own wall,
+   not a guess about the provider's arithmetic. With several recorded
+   cut-offs the ceiling is their median, so one odd window doesn't set it.
+3. From the ceiling and the pace of the last half hour: how long until the
+   wall at this pace. That is the number you want while working, so it is
+   also what `agentburn statusline` prints.
 
 Unit: "weighted tokens" = tokens × price ratio, normalized so that one
 uncached input token of the reference model = 1.
@@ -22,6 +28,8 @@ uncached input token of the reference model = 1.
 
 from __future__ import annotations
 
+import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -41,6 +49,11 @@ CACHE_WRITE_W = 1.25
 
 DEFAULT_WINDOW_HOURS = 5.0
 WEEK_SECONDS = 7 * 86400
+# Pace for "time to wall" is measured over this much recent usage.
+PACE_SECONDS = 30 * 60
+# A measured ceiling outlives the run that found it, so that a short, fast
+# `statusline` call (a few days of logs) still knows where the wall is.
+STATE_PATH = os.path.join(os.path.expanduser("~"), ".agentburn", "ceiling.json")
 
 
 @dataclass
@@ -66,7 +79,15 @@ class LimitsReport:
     mix: list = field(default_factory=list)  # [(label, share)] over the period
     ceiling: Optional[float] = None
     ceiling_at: Optional[float] = None
+    ceiling_source: str = ""  # "recorded" (agent wrote the cut-off) | "--hit" | "saved"
+    ceiling_hits: int = 0  # how many recorded cut-offs the ceiling is the median of
     slots_over_ceiling: int = 0
+    pace: float = 0.0  # weighted tokens per second over the last PACE_SECONDS
+    minutes_to_wall: Optional[float] = None  # at that pace; None = no ceiling or no pace
+    week_peak: Optional[Window] = None  # heaviest rolling 7-day span
+    week_ceiling: Optional[float] = None  # measured from a recorded weekly cut-off
+    provider_used: list = field(default_factory=list)  # [(window_minutes, used_percent, ts)] latest reading
+    peak_by_project: list = field(default_factory=list)  # [(project, share)]
     unsupported: str = ""  # non-empty when the adapter can't answer this
     notes: list = field(default_factory=list)
 
@@ -130,11 +151,57 @@ def _median(xs: list) -> float:
     return xs[mid] if len(xs) % 2 else (xs[mid - 1] + xs[mid]) / 2
 
 
+def _window_weight(series: dict, end: float, span: float, start: Optional[float] = None) -> float:
+    """Weight recorded in [start, end) — start defaults to end - span."""
+    lo = start if start is not None else end - span
+    return sum(w for t, w in series.items() if lo <= t < end)
+
+
+def load_saved_ceiling(agent: str, path: str = STATE_PATH) -> Optional[dict]:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+    entry = data.get(agent) if isinstance(data, dict) else None
+    return entry if isinstance(entry, dict) and entry.get("ceiling") else None
+
+
+def save_ceiling(agent: str, rep: "LimitsReport", path: str = STATE_PATH) -> None:
+    """Remember a measured ceiling. Never fatal — it's a convenience for statusline."""
+    if not rep.ceiling or rep.ceiling_source == "saved":
+        return
+    try:
+        data = {}
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f) or {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        data[agent] = {
+            "ceiling": round(rep.ceiling),
+            "ceiling_at": rep.ceiling_at,
+            "source": rep.ceiling_source,
+            "hits": rep.ceiling_hits,
+            "window_hours": rep.window_hours,
+            "week_ceiling": round(rep.week_ceiling) if rep.week_ceiling else None,
+            "saved_at": time.time(),
+        }
+        os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=1)
+    except OSError:
+        pass
+
+
 def build_limits(
     snap: Snapshot,
     hit: Optional[float] = None,
     window_hours: float = DEFAULT_WINDOW_HOURS,
     now: Optional[float] = None,
+    saved: Optional[dict] = None,
 ) -> LimitsReport:
     now = now or snap.generated_at or time.time()
     span = int(window_hours * 3600)
@@ -182,6 +249,29 @@ def build_limits(
                 in_peak_source[c.source] = in_peak_source.get(c.source, 0.0) + w
         rep.peak_by_model = [kv for kv in _shares(in_peak_model)[:4] if kv[1] >= 0.005]
         rep.peak_by_source = [kv for kv in _shares(in_peak_source)[:4] if kv[1] >= 0.005]
+        project_of = {}
+        for s_ in snap.sessions:
+            root = s_.project
+            if s_.parent_id and not root:
+                root = None  # filled below from the parent
+            project_of[s_.id] = root
+        for s_ in snap.sessions:
+            if s_.parent_id and not project_of.get(s_.id):
+                project_of[s_.id] = project_of.get(s_.parent_id)
+        in_peak_project: dict = {}
+        for c in snap.usage_cells:
+            if rep.peak.start <= c.start < rep.peak.end and c.session:
+                proj = project_of.get(c.session)
+                if proj:
+                    name = os.path.basename(proj.rstrip("/\\")) or proj
+                    in_peak_project[name] = in_peak_project.get(name, 0.0) + cell_weight(c)
+        if in_peak_project:
+            rep.peak_by_project = [kv for kv in _shares(in_peak_project)[:4] if kv[1] >= 0.005]
+
+    week_rolling = _rolling(series, WEEK_SECONDS)
+    if week_rolling:
+        end, weight = max(week_rolling, key=lambda kv: kv[1])
+        rep.week_peak = Window(start=end - WEEK_SECONDS, end=end, weight=weight)
 
     # Non-overlapping slots for "typical": a rolling maximum is by definition
     # unusual, and 60 overlapping views of the same busy hour would drag the
@@ -203,16 +293,97 @@ def build_limits(
     if days:
         rep.busiest_day = max(days.items(), key=lambda kv: kv[1])
 
+    # Ceiling, in order of trust: the cut-off you name by hand → cut-offs the
+    # agent recorded itself → one saved by an earlier run.
     if hit:
         rep.ceiling_at = hit
-        rep.ceiling = sum(w for t, w in series.items() if hit - span <= t < hit)
-        if rep.ceiling > 0:
-            rep.slots_over_ceiling = sum(1 for w in active if w >= rep.ceiling)
-        else:
+        rep.ceiling_source = "--hit"
+        rep.ceiling = _window_weight(series, hit, span)
+        if rep.ceiling <= 0:
+            rep.ceiling = None
             rep.notes.append(
-                "no usage recorded in the 5 hours before the timestamp you passed — "
+                f"no usage recorded in the {window_hours:g} hours before the timestamp you passed — "
                 "check the date, or whether that window is inside --days."
             )
+    if not rep.ceiling:
+        session_hits = [h for h in snap.limit_hits if h.kind not in ("weekly", "week")]
+        measured = []
+        for h in session_hits:
+            # When the message said when the window resets, the window is the
+            # one ending there; otherwise the rolling span before the cut-off.
+            start = h.reset_at - span if h.reset_at and h.reset_at - span <= h.ts else None
+            w = _window_weight(series, h.ts, span, start)
+            if w > 0:
+                measured.append((w, h.ts))
+        if measured:
+            measured.sort()
+            mid = measured[len(measured) // 2]
+            rep.ceiling = _median([w for w, _ in measured])
+            rep.ceiling_at = mid[1]
+            rep.ceiling_source = "recorded"
+            rep.ceiling_hits = len(measured)
+    if not rep.ceiling and snap.rate_limits:
+        # The provider's own percentage next to our weighted usage of the same
+        # window: ceiling = weight / used_percent. One sample is noisy (the
+        # window may have started before our logs); the median of many is not.
+        est = []
+        est_week = []
+        latest: dict = {}
+        last_span_reading = None
+        for r in sorted(snap.rate_limits, key=lambda r: r.ts):
+            latest[r.window_minutes] = (r.used_percent, r.ts)
+            same_span = abs(r.window_minutes * 60 - span) <= BUCKET_SECONDS
+            if same_span:
+                last_span_reading = r.ts
+            if r.used_percent < 10:
+                continue
+            w = _window_weight(series, r.ts, r.window_minutes * 60)
+            if w <= 0:
+                continue
+            if same_span:
+                est.append((w / r.used_percent * 100, r.ts))
+            elif abs(r.window_minutes * 60 - WEEK_SECONDS) <= BUCKET_SECONDS:
+                # exactly the week: a 30-day reading is not a weekly ceiling
+                est_week.append(w / r.used_percent * 100)
+        rep.provider_used = [(wm, used, ts) for wm, (used, ts) in sorted(latest.items())]
+        if est:
+            est.sort()
+            rep.ceiling = _median([w for w, _ in est])
+            rep.ceiling_at = est[len(est) // 2][1]
+            rep.ceiling_source = "provider"
+            rep.ceiling_hits = len(est)
+            # The provider may stop reporting this window (plan change, client
+            # update): a peak that fell after the last reading was never
+            # measured against this ceiling, and the ratio would be a guess.
+            if rep.peak and last_span_reading is not None and rep.peak.end > last_span_reading + span:
+                rep.notes.append(
+                    f"the peak window fell after the provider's last {window_hours:g}h reading "
+                    f"({_stamp(last_span_reading)}) — the ceiling is measured on earlier windows only; "
+                    "the % above is a comparison across periods, not a measured overrun."
+                )
+        if est_week and not rep.week_ceiling:
+            rep.week_ceiling = _median(est_week)
+    if not rep.ceiling and saved:
+        rep.ceiling = float(saved["ceiling"])
+        rep.ceiling_at = saved.get("ceiling_at")
+        rep.ceiling_source = "saved"
+        rep.ceiling_hits = int(saved.get("hits") or 0)
+        if saved.get("week_ceiling"):
+            rep.week_ceiling = float(saved["week_ceiling"])
+    if rep.ceiling:
+        rep.slots_over_ceiling = sum(1 for w in active if w >= rep.ceiling)
+
+    weekly_hits = [h for h in snap.limit_hits if h.kind in ("weekly", "week")]
+    wk = [_window_weight(series, h.ts, WEEK_SECONDS) for h in weekly_hits]
+    wk = [w for w in wk if w > 0]
+    if wk:
+        rep.week_ceiling = _median(wk)
+
+    # Pace and time to wall: recent half hour, straight-line.
+    rep.pace = _window_weight(series, now, PACE_SECONDS) / PACE_SECONDS
+    if rep.ceiling and rep.pace > 0:
+        remaining = rep.ceiling - rep.current
+        rep.minutes_to_wall = max(0.0, remaining / rep.pace / 60.0)
     return rep
 
 
@@ -294,15 +465,41 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
         f"   {'LAST 7 DAYS':<25} {_fmt(rep.week_total):>10}   "
         + p.dim("weekly caps count this")
     )
+    if rep.week_peak and rep.week_peak.weight > 0:
+        wk_bits = f"{_stamp(rep.week_peak.start)}–{_stamp(rep.week_peak.end)}"
+        if rep.week_total > 0:
+            wk_bits += f" · this week is {rep.week_total / rep.week_peak.weight:.0%} of it"
+        out.append(
+            f"   {'PEAK 7 DAYS':<25} {_fmt(rep.week_peak.weight):>10}   " + p.dim(wk_bits)
+        )
+    if rep.peak_by_project:
+        out.append(
+            "   "
+            + f"{'PEAK BY PROJECT':<25} "
+            + p.dim(" · ".join(f"{n} {v:.0%}" for n, v in rep.peak_by_project[:3]))
+        )
     out.append("")
 
     if rep.ceiling:
         out.append(p.b("   YOUR MEASURED CEILING"))
-        out.append(
-            p.dim(
-                f"   the window that ended {_stamp(rep.ceiling_at)}, when you say you were cut off"
+        if rep.ceiling_source == "recorded":
+            how = (
+                f"median of {rep.ceiling_hits} cut-offs Claude Code recorded itself"
+                if rep.ceiling_hits > 1
+                else f"the window that ended {_stamp(rep.ceiling_at)}, when Claude Code recorded the cut-off"
             )
-        )
+        elif rep.ceiling_source == "provider":
+            how = (
+                f"from {rep.ceiling_hits} readings of the provider's own usage % that "
+                f"{agent_label(rep.agent)} recorded, against your usage in the same windows"
+            )
+        elif rep.ceiling_source == "saved":
+            how = "saved by an earlier run" + (
+                f" ({_stamp(rep.ceiling_at)})" if rep.ceiling_at else ""
+            )
+        else:
+            how = f"the window that ended {_stamp(rep.ceiling_at)}, when you say you were cut off"
+        out.append(p.dim(f"   {how}"))
         out.append(f"   {'ceiling':<25} {_fmt(rep.ceiling):>10}   weighted tokens")
         for label, val in (
             ("peak window", peak.weight),
@@ -319,6 +516,23 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
                     f"   {rep.slots_over_ceiling} other slot(s) in this window reached it too"
                 )
             )
+        if rep.minutes_to_wall is not None:
+            ttw = _fmt_minutes(rep.minutes_to_wall)
+            txt = f"   {'TIME TO WALL':<25} {ttw:>10}   at the pace of the last {PACE_SECONDS // 60} min"
+            out.append(
+                p.red(txt) if rep.minutes_to_wall < 30 else (p.yellow(txt) if rep.minutes_to_wall < 90 else txt)
+            )
+        elif rep.pace <= 0:
+            out.append(p.dim(f"   {'TIME TO WALL':<25} {'idle':>10}   nothing in the last {PACE_SECONDS // 60} min"))
+        for wm, used, ts in rep.provider_used:
+            label = f"{wm // 60}h" if wm < 1440 else f"{wm // 1440}d"
+            out.append(
+                p.dim(f"   {'provider says':<25} {used:>9.0f}%   of the {label} window, as of {_stamp(ts)}")
+            )
+        if rep.week_ceiling:
+            share = rep.week_total / rep.week_ceiling
+            txt = f"   {'weekly ceiling':<25} {_fmt(rep.week_ceiling):>10}   this week {share:.0%} of it"
+            out.append(p.red(txt) if share >= 0.9 else (p.yellow(txt) if share >= 0.6 else txt))
         out.append("")
 
     if rep.mix:
@@ -342,8 +556,9 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
     if not rep.ceiling:
         out.append(
             p.dim(
-                "   Been cut off before? `agentburn limits --hit \"YYYY-MM-DD HH:MM\"` turns that\n"
-                "   moment into a ceiling measured from your own wall."
+                "   No cut-off recorded in this window. Been cut off before? "
+                "`agentburn limits --hit \"YYYY-MM-DD HH:MM\"`\n"
+                "   turns that moment into a ceiling measured from your own wall."
             )
         )
     out.append(
@@ -357,6 +572,41 @@ def render_limits(rep: LimitsReport, color: bool = True) -> str:
     )
     out.append("")
     return "\n".join(out)
+
+
+def _fmt_minutes(m: float) -> str:
+    if m < 1:
+        return "<1 min"
+    if m < 90:
+        return f"{m:.0f} min"
+    if m < 48 * 60:
+        return f"{m / 60:.1f} h"
+    return f"{m / 1440:.1f} d"
+
+
+def statusline(rep: LimitsReport) -> str:
+    """One line for an editor/status bar: how full the window is, time to wall.
+
+    Deliberately short and free of ANSI: Claude Code's `statusLine` prints
+    exactly what the command writes.
+    """
+    if rep.unsupported or not rep.peak:
+        return "⏳ agentburn: no windows"
+    if rep.ceiling:
+        share = rep.current / rep.ceiling
+        bits = [f"⏳ {rep.window_hours:g}h {share:.0%}"]
+        if rep.minutes_to_wall is not None:
+            bits.append(f"wall in {_fmt_minutes(rep.minutes_to_wall)}")
+        elif rep.pace <= 0:
+            bits.append("idle")
+        if rep.week_ceiling and rep.week_total:
+            bits.append(f"week {rep.week_total / rep.week_ceiling:.0%}")
+        return " · ".join(bits)
+    bits = [f"⏳ {rep.window_hours:g}h {_fmt(rep.current)}"]
+    if rep.typical > 0:
+        bits.append(f"{rep.current / rep.typical:.1f}× typical")
+    bits.append("no ceiling yet")
+    return " · ".join(bits)
 
 
 def _tips(rep: LimitsReport) -> list:
@@ -430,7 +680,19 @@ def limits_json(rep: LimitsReport) -> dict:
         "mix": [{"kind": k, "share": round(s, 4)} for k, s in rep.mix],
         "ceiling": round(rep.ceiling) if rep.ceiling else None,
         "ceiling_at": rep.ceiling_at,
+        "ceiling_source": rep.ceiling_source or None,
+        "ceiling_hits": rep.ceiling_hits,
         "slots_over_ceiling": rep.slots_over_ceiling,
+        "pace_per_minute": round(rep.pace * 60),
+        "minutes_to_wall": round(rep.minutes_to_wall, 1) if rep.minutes_to_wall is not None else None,
+        "week_peak": (
+            {"start": rep.week_peak.start, "end": rep.week_peak.end, "weight": round(rep.week_peak.weight)}
+            if rep.week_peak
+            else None
+        ),
+        "week_ceiling": round(rep.week_ceiling) if rep.week_ceiling else None,
+        "provider_used": [{"window_minutes": wm, "used_percent": u, "ts": ts} for wm, u, ts in rep.provider_used],
+        "peak_by_project": [{"project": n, "share": round(v, 4)} for n, v in rep.peak_by_project],
         "tips": _tips(rep),
         "notes": rep.notes,
     }

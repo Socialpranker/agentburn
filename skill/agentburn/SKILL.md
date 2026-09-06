@@ -24,10 +24,24 @@ database read-only. Use it instead of guessing about costs.
    run `uvx agentburn limits --json` and read: `peak` (the worst rolling
    5-hour window), `typical_window`, `peak_by_model`, `peak_by_source`,
    `mix`, `tips`. Lead with peak ÷ typical: a wall is hit by the peak.
-   If the user remembers when they were cut off, re-run with
-   `--hit "YYYY-MM-DD HH:MM"` — that turns their own cut-off into a
-   measured ceiling and everything else into a percentage of it.
+   `ceiling` is measured from cut-offs Claude Code recorded itself
+   (`ceiling_source: recorded`, `ceiling_hits`); `minutes_to_wall` is at
+   the pace of the last 30 minutes. If there is no ceiling and the user
+   remembers when they were cut off, re-run with `--hit "YYYY-MM-DD HH:MM"`.
    Never state an absolute limit: the provider's formula is not public.
+   Codex CLI: `ceiling_source: provider` means the ceiling comes from the
+   `used_percent` Codex records itself — an estimate, other devices on the
+   account count too; `provider_used` is the latest raw reading.
+   Gemini CLI and opencode: tokens only (opencode carries its own costs
+   when the provider is priced); no cut-offs are recorded, so `ceiling`
+   is absent unless `--hit` names one.
+4b. For "why is my context so big / should I /clear / what does skill X
+   cost": run `uvx agentburn context --json` and read `bands`, `savings`
+   (`clear_at` → `share_not_spent`), `longest_sessions`, `by_effort`,
+   `skills` (`tokens_per_load`, measured). Recommend the lowest `clear_at`
+   that keeps most of the best saving.
+4c. For "what did that commit / PR cost": run `uvx agentburn commits --json`
+   and read `top` (costliest commits) and `repos` (median per repository).
 5. For one channel ("what did you do in telegram?"):
    add `--source telegram` (or cron / heartbeat / subagent / cli).
 6. Answer in the user's language, lead with the verdict

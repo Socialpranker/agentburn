@@ -30,6 +30,8 @@ class SessionRec:
     cost_basis: str  # "actual" | "estimated" | "unknown"
     message_count: int = 0
     provider: Optional[str] = None  # billing provider, for doctor diagnostics
+    project: Optional[str] = None  # working directory the session ran in, when recorded
+    branch: Optional[str] = None  # git branch, when the agent records it
 
     @property
     def total_tokens(self) -> int:
@@ -88,6 +90,67 @@ class UsageCell:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    session: str = ""  # owning session id, so a window can be split by project
+
+
+@dataclass
+class LimitHit:
+    """The agent itself recorded that a usage limit was reached.
+
+    Claude Code writes a synthetic assistant turn ("You've hit your session
+    limit · resets 8:30pm (Europe/Amsterdam)") at the moment of the cut-off.
+    That moment is a measured wall: the window that ended there is a ceiling
+    nobody had to guess. `reset_at` is the window's scheduled end when the
+    message stated one and it could be placed on the clock.
+    """
+
+    ts: float
+    kind: str  # "session" (rolling 5h) | "weekly" | other wording, lowercased
+    reset_at: Optional[float] = None
+
+
+@dataclass
+class RateLimitSample:
+    """The provider's own reading of a usage window, as the agent recorded it.
+
+    Codex writes `rate_limits.{primary,secondary}.used_percent` with every
+    token count. Paired with our weighted usage in the same window that is a
+    measured ceiling: weight_in_window / used_percent × 100.
+    """
+
+    ts: float
+    window_minutes: int
+    used_percent: float
+    resets_at: Optional[float] = None
+
+
+@dataclass
+class ContextCall:
+    """One API call's context size: what the model had to read before answering.
+
+    On a subscription the context is the window: a call at 300k context costs
+    the same cache-read volume as three calls at 100k. Adapters that see
+    per-call usage fill these; `agentburn context` turns them into the price
+    of long sessions and the saving of a `/clear` at a threshold.
+    """
+
+    ts: Optional[float]
+    session: str
+    model: Optional[str]
+    context: int  # input + cache read + cache write, i.e. everything re-read
+    output: int
+    effort: Optional[str] = None
+
+
+@dataclass
+class SkillLoad:
+    """A skill invocation and how much context it added (measured, not read
+    from disk: bundled skills never touch the disk)."""
+
+    session: str
+    ts: Optional[float]
+    skill: str
+    tokens: int
 
 
 @dataclass
@@ -104,6 +167,9 @@ _AGENT_LABELS = {
     "hermes": "Hermes",
     "openclaw": "OpenClaw",
     "claude-code": "Claude Code",
+    "codex": "Codex CLI",
+    "gemini": "Gemini CLI",
+    "opencode": "opencode",
 }
 
 # Storage the user would name in an upstream bug report, per agent.
@@ -111,7 +177,19 @@ _AGENT_STORES = {
     "hermes": "`~/.hermes/state.db`",
     "openclaw": "the local transcript store",
     "claude-code": "`~/.claude/projects/**.jsonl`",
+    "codex": "`~/.codex/sessions/**/rollout-*.jsonl`",
+    "gemini": "`~/.gemini/tmp/*/chats/session-*.json`",
+    "opencode": "`~/.local/share/opencode/opencode.db`",
 }
+
+
+# Agents that record no prices at all (subscription or free tier): a session
+# without a cost there is the design, not an accounting gap.
+NO_LOCAL_COSTS = frozenset({"claude-code", "codex", "gemini"})
+
+
+def records_costs(agent: str) -> bool:
+    return agent_key(agent) not in NO_LOCAL_COSTS
 
 
 def agent_key(agent: str) -> str:
@@ -132,7 +210,7 @@ def agent_store(agent: str) -> str:
 
 @dataclass
 class Snapshot:
-    agent: str  # "hermes" | "openclaw" | "claude-code"
+    agent: str  # "hermes" | "openclaw" | "claude-code" | "codex" | "gemini" | "opencode"
     source_path: str
     generated_at: float
     days: Optional[int]
@@ -150,3 +228,11 @@ class Snapshot:
     )  # session_id → count of context compactions
     # windowed usage (only adapters with per-call timestamps fill this)
     usage_cells: list[UsageCell] = field(default_factory=list)
+    # moments the agent itself recorded a limit cut-off (measured ceilings)
+    limit_hits: list = field(default_factory=list)  # LimitHit
+    # per-call context sizes (only adapters with per-call usage fill this)
+    context_calls: list = field(default_factory=list)  # ContextCall
+    # skill invocations with their measured context cost
+    skill_loads: list = field(default_factory=list)  # SkillLoad
+    # the provider's own window readings, when the agent records them
+    rate_limits: list = field(default_factory=list)  # RateLimitSample

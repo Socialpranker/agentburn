@@ -56,7 +56,10 @@ RECIPES = """examples:
   agentburn why                      behavioral forensics: loops, retry storms, idle runs
   agentburn why --source telegram    decompose ONE source: which functions it called, loops, errors
   agentburn limits                   subscription plans bill windows, not dollars: how fast you fill one
-  agentburn limits --hit "2026-08-20 14:30"   calibrate against the window where you actually got cut off
+  agentburn limits --hit "2026-08-20 14:30"   calibrate by hand (Claude Code's own cut-off records are used automatically)
+  agentburn context                  the price of long contexts: what a /clear at 150k would have saved, what a skill costs
+  agentburn commits                  what each commit cost you — sessions joined to your repositories' git log
+  agentburn statusline               one line for Claude Code's statusLine: window fill %, time to wall
   agentburn drift                    your model spend × world usage trend — are you paying for a dying model?
   agentburn rank                     you vs the community Burn Index (efficiency percentiles)
   agentburn --submit                 join the index: anonymized payload + a link YOU click
@@ -74,14 +77,18 @@ RECIPES = """examples:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="agentburn",
-        description="Where does your AI agent burn money? Local profiler, zero deps, nothing leaves your machine.",
+        description="Where does your AI agent burn money or usage? Claude Code, Codex, Gemini CLI, opencode, "
+                    "OpenClaw, Hermes. Local profiler, zero deps, nothing leaves your machine.",
         epilog=RECIPES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("command", nargs="?",
-                    choices=["report", "doctor", "why", "limits", "explain", "mcp", "fix", "drift", "rank"],
+                    choices=["report", "doctor", "why", "limits", "context", "commits", "statusline",
+                             "explain", "mcp", "fix", "drift", "rank"],
                     default="report",
                     help="report (default) · why (forensics) · limits (subscription windows) · "
+                         "context (price of long contexts, skill costs) · commits (cost per commit) · "
+                         "statusline (one line for an editor status bar) · "
                          "drift (spend × world trend) · rank (you vs the Burn Index) · "
                          "fix (config patches) · explain (LLM) · doctor (accounting health) · mcp")
     ap.add_argument("--agent", default=None, choices=sorted(ADAPTERS),
@@ -148,6 +155,9 @@ def pick_agents(args) -> list:
             "  looked for: ~/.hermes/state.db (Hermes Agent)\n"
             "              ~/.openclaw/agents/*/sessions/sessions.json (OpenClaw)\n"
             "              ~/.claude/projects/*.jsonl (Claude Code)\n"
+            "              ~/.codex/sessions/**/rollout-*.jsonl (Codex CLI)\n"
+            "              ~/.gemini/tmp/*/chats/session-*.json (Gemini CLI)\n"
+            "              ~/.local/share/opencode/opencode.db (opencode)\n"
             "  pass --agent <name> --db <path> if the data lives elsewhere.",
             file=sys.stderr,
         )
@@ -226,6 +236,10 @@ def main(argv=None) -> int:
         args.days = 1
     elif args.week:
         args.days = 7
+    elif args.command == "statusline" and args.days == 30:
+        # Runs on every turn of the editor: read the last few days only. The
+        # ceiling comes from the state file `limits` keeps, not from history.
+        args.days = 3
     color = sys.stdout.isatty() and not args.no_color and _ansi_ok()
 
     single_modes = (args.command in ("doctor", "explain", "fix")
@@ -243,6 +257,20 @@ def main(argv=None) -> int:
             snap = filter_snapshot(snap, args.source)
         return snap
 
+    def load_all(names):
+        """One adapter failing (empty window, unreadable file) must not hide the others' reports."""
+        loaded, errors = [], []
+        for n in names:
+            try:
+                loaded.append((n, load(n)))
+            except (FileNotFoundError, RuntimeError) as e:
+                errors.append((n, e))
+        if not loaded:
+            raise errors[0][1]
+        for n, e in errors:
+            print(f"agentburn: {n}: {e} — skipped", file=sys.stderr)
+        return loaded
+
     try:
         if args.command == "doctor":
             from .doctor import render_doctor
@@ -255,7 +283,7 @@ def main(argv=None) -> int:
             from .burnindex import (INDEX_URL, build_metrics, load_index, rank_against,
                                     render_rank, submit_url)
 
-            snaps = [load(n) for n in found]
+            snaps = [sn for _, sn in load_all(found)]
             analyses = [analyze(s, night_window=args.night) for s in snaps]
             breps = [analyze_behavior(s) for s in snaps]
             from .limits import build_limits
@@ -282,7 +310,7 @@ def main(argv=None) -> int:
         if args.command == "drift":
             from .drift import TRENDS_URL, build_drift, load_trends, render_drift
 
-            analyses = [analyze(load(n), night_window=args.night) for n in found]
+            analyses = [analyze(sn, night_window=args.night) for _, sn in load_all(found)]
             try:
                 trends = load_trends(args.trends or TRENDS_URL)
             except RuntimeError as e:
@@ -349,15 +377,21 @@ def main(argv=None) -> int:
             print()
             return 0
 
-        if args.command == "limits":
-            from .limits import build_limits, limits_json, render_limits
+        if args.command in ("limits", "statusline"):
+            from .limits import (build_limits, limits_json, load_saved_ceiling, render_limits,
+                                 save_ceiling, statusline)
 
-            reports = [
-                build_limits(
-                    load(n), hit=args.hit, window_hours=args.window or 5.0
+            reports = []
+            for n, sn in load_all(found):
+                rep = build_limits(
+                    sn, hit=args.hit, window_hours=args.window or 5.0,
+                    saved=load_saved_ceiling(n),
                 )
-                for n in found
-            ]
+                save_ceiling(n, rep)
+                reports.append(rep)
+            if args.command == "statusline":
+                print(statusline(reports[0]))
+                return 0
             if args.json:
                 import json as _json
 
@@ -369,13 +403,48 @@ def main(argv=None) -> int:
                     print(render_limits(r, color=color))
             return 0
 
+        if args.command == "context":
+            from .context import build_context, context_json, render_context
+
+            reports = [build_context(sn) for _, sn in load_all(found)]
+            if args.json:
+                import json as _json
+
+                payloads = [context_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_context(r, color=color))
+            return 0
+
+        if args.command == "commits":
+            import time as _time
+
+            from .commits import build_commits, commits_json, render_commits
+
+            since = _time.time() - args.days * 86400 if args.days else None
+            reports = [build_commits(sn, since=since) for _, sn in load_all(found)]
+            if args.json:
+                import json as _json
+
+                payloads = [commits_json(r) for r in reports]
+                print(_json.dumps(payloads[0] if len(payloads) == 1 else payloads,
+                                  indent=2, ensure_ascii=False))
+            else:
+                for r in reports:
+                    print(render_commits(r, color=color))
+            return 0
+
         if args.command == "why":
             from .behavior import analyze_behavior, behavior_json, render_behavior
 
-            if len(found) > 1 and not args.json:
-                print(("\033[2m" if color else "") + f"Found {len(found)} agents: {', '.join(found)} — "
+            loaded = load_all(found)
+            if len(loaded) > 1 and not args.json:
+                names = [n for n, _ in loaded]
+                print(("\033[2m" if color else "") + f"Found {len(names)} agents: {', '.join(names)} — "
                       "one forensics report each." + ("\033[0m" if color else ""))
-            reports = [analyze_behavior(load(n)) for n in found]
+            reports = [analyze_behavior(sn) for _, sn in loaded]
             if args.json:
                 import json as _json
 
@@ -387,7 +456,9 @@ def main(argv=None) -> int:
                     print(render_behavior(r, color=color))
             return 0
 
-        snaps = [load(n) for n in found]
+        loaded = load_all(found)
+        found = [n for n, _ in loaded]
+        snaps = [sn for _, sn in loaded]
         analyses = [analyze(sn, night_window=args.night) for sn in snaps]
     except (FileNotFoundError, RuntimeError) as e:
         print(f"agentburn: {e}", file=sys.stderr)
@@ -468,6 +539,10 @@ def _next_hints(args, color: bool, subscription: bool = False) -> None:
         hints.insert(
             0,
             "agentburn limits         → how fast you fill a 5-hour window (what a subscription actually bills)",
+        )
+        hints.insert(
+            1,
+            "agentburn context        → what long contexts cost, what a /clear at 150k would have saved",
         )
     if not os.path.exists(args.baseline_file or baseline.DEFAULT_PATH):
         hints.append("agentburn --save-baseline → snapshot now, prove your savings after you optimize")

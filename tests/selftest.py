@@ -658,9 +658,9 @@ def main():
     lines = [json.loads(l) for l in r_mcp.stdout.strip().splitlines()]
     byid = {l.get("id"): l for l in lines}
     ok("mcp: initialize → serverInfo", byid[1]["result"]["serverInfo"]["name"] == "agentburn")
-    ok("mcp: tools/list → 4 tools",
+    ok("mcp: tools/list → 6 tools",
        {t["name"] for t in byid[2]["result"]["tools"]}
-       == {"burn_report", "burn_why", "burn_limits", "burn_card"})
+       == {"burn_report", "burn_why", "burn_limits", "burn_card", "burn_context", "burn_commits"})
     body0 = json.loads(byid[3]["result"]["content"][0]["text"])
     ok("mcp: tools/call burn_report returns the report JSON",
        byid[3]["result"]["isError"] is False and body0["agentburn"] == 1 and body0["total"]["sessions"] > 0)
@@ -1072,6 +1072,432 @@ def main():
     svg = share_svg(a_cc, lim)
     ok("card svg: same window line", "peak" in svg and svg.startswith("<svg"))
     ok("card svg: source bars rendered without prices", "where it burns" in svg)
+
+
+    # ------------------------------------------------ dedup / hits / context
+    # One model reply = several transcript lines (one per content block), all
+    # carrying the SAME usage. Summing rows inflated calls and tokens ~1.8×.
+    print("claude-code: requestId dedup, recorded cut-offs, context, skills, commits:")
+    from agentburn.context import build_context, context_json, render_context  # noqa: E402
+    from agentburn.limits import statusline, load_saved_ceiling, save_ceiling  # noqa: E402
+
+    dd_root = os.path.join(tempfile.mkdtemp(), "projects")
+    dd_proj = os.path.join(dd_root, "-tmp-dedup")
+    os.makedirs(dd_proj)
+    t0 = now - 4 * 3600
+    repo_dir = tempfile.mkdtemp()
+
+    def row(ts, req, blocks, usage, model="claude-sonnet-5", effort=None, cwd=repo_dir):
+        d = {"type": "assistant", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + "Z",
+             "requestId": req, "cwd": cwd, "gitBranch": "main",
+             "message": {"model": model, "content": blocks, "usage": usage}}
+        if effort:
+            d["effort"] = effort
+        return json.dumps(d)
+
+    u1 = {"input_tokens": 1000, "output_tokens": 100, "cache_read_input_tokens": 50_000, "cache_creation_input_tokens": 0}
+    u2 = {"input_tokens": 1000, "output_tokens": 100, "cache_read_input_tokens": 60_000, "cache_creation_input_tokens": 0}
+    u3 = {"input_tokens": 0, "output_tokens": 50, "cache_read_input_tokens": 250_000, "cache_creation_input_tokens": 0}
+    lines = [
+        # reply 1: thinking + text + tool_use Skill → three rows, one usage
+        row(t0, "req-1", [{"type": "thinking", "thinking": "…"}], u1, effort="high"),
+        row(t0, "req-1", [{"type": "text", "text": "hi"}], u1, effort="high"),
+        row(t0, "req-1", [{"type": "tool_use", "id": "tu1", "name": "Skill", "input": {"skill": "deploy-verify"}}], u1, effort="high"),
+        # reply 2: context grew by 10k after the lone Skill call
+        row(t0 + 60, "req-2", [{"type": "text", "text": "ok"}], u2, effort="high"),
+        # reply 3: a long-context call
+        # a bucket is 300 s wide: keep the long call a full bucket away from the first commit
+        row(t0 + 1200, "req-3", [{"type": "text", "text": "…"}], u3, model="claude-opus-5", effort="max"),
+        # the cut-off Claude Code writes itself: zero usage, must not count as a call
+        json.dumps({"type": "assistant", "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(t0 + 1260)) + "Z",
+                    "isApiErrorMessage": True, "requestId": "req-4",
+                    "message": {"model": "<synthetic>", "usage": {"input_tokens": 0, "output_tokens": 0},
+                                "content": [{"type": "text", "text": "You've hit your session limit · resets 8:30pm (Europe/Amsterdam)"}]}}),
+    ]
+    with open(os.path.join(dd_proj, "22222222-2222-4222-8222-222222222222.jsonl"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    dd = cc.load(db_path=dd_root, days=30, now=now)
+    rec = dd.sessions[0]
+    ok("dedup: three rows of one reply count as ONE call", rec.api_calls == 3, str(rec.api_calls))
+    ok("dedup: usage summed once per requestId",
+       rec.cache_read_tokens == 360_000 and rec.input_tokens == 2000, str(rec.cache_read_tokens))
+    ok("dedup: synthetic cut-off row is not an API call", all(c.model != "<synthetic>" for c in dd.usage_cells))
+    ok("dedup: cells agree with the session total",
+       sum(c.cache_read_tokens for c in dd.usage_cells) == rec.cache_read_tokens)
+    ok("adapter: cwd and branch recorded on the session", rec.project == repo_dir and rec.branch == "main")
+    ok("adapter: title uses the recorded working directory",
+       rec.title.startswith(os.path.basename(repo_dir)))
+    ok("hits: the recorded cut-off is a LimitHit with kind + reset",
+       len(dd.limit_hits) == 1 and dd.limit_hits[0].kind == "session"
+       and abs(dd.limit_hits[0].ts - (t0 + 1260)) < 1)
+    ok("hits: warning names the recorded cut-off", any("cut-off" in w for w in dd.warnings))
+    lim_auto = build_limits(dd, now=now)
+    ok("limits: ceiling measured from the recorded cut-off, no --hit needed",
+       lim_auto.ceiling is not None and lim_auto.ceiling > 0 and lim_auto.ceiling_source == "recorded")
+    ok("limits: week peak found", lim_auto.week_peak is not None and lim_auto.week_peak.weight > 0)
+    ok("limits: peak split by project uses the recorded cwd",
+       lim_auto.peak_by_project and lim_auto.peak_by_project[0][0] == os.path.basename(repo_dir))
+    ok("limits: --hit by hand still wins over the recorded one",
+       build_limits(dd, hit=t0 + 1230, now=now).ceiling_source == "--hit")
+    r_auto = render_limits(lim_auto, color=False)
+    ok("limits render: says the cut-off was recorded by Claude Code", "recorded" in r_auto)
+    ok("limits render: time to wall line present", "TIME TO WALL" in r_auto)
+    lim_busy = build_limits(dd, now=t0 + 1300)
+    ok("limits: pace over the last 30 min gives minutes to wall",
+       lim_busy.pace > 0 and lim_busy.minutes_to_wall is not None)
+    sl = statusline(lim_busy)
+    ok("statusline: one line, percent of ceiling, no ANSI",
+       "\n" not in sl and "%" in sl and "\033" not in sl, sl)
+    state = os.path.join(tempfile.mkdtemp(), "ceiling.json")
+    save_ceiling("claude-code", lim_auto, path=state)
+    saved = load_saved_ceiling("claude-code", path=state)
+    ok("ceiling state: saved and reloaded", saved is not None and saved["ceiling"] == round(lim_auto.ceiling))
+    dd_nohit = cc.load(db_path=dd_root, days=30, now=now)
+    dd_nohit.limit_hits = []
+    lim_saved = build_limits(dd_nohit, now=now, saved=saved)
+    ok("ceiling state: a run without cut-offs falls back to the saved ceiling",
+       lim_saved.ceiling_source == "saved" and lim_saved.ceiling == float(saved["ceiling"]))
+    ok("statusline: no ceiling → says so instead of inventing one",
+       "no ceiling" in statusline(build_limits(dd_nohit, now=now)))
+    ok("limits json: new fields", "minutes_to_wall" in limits_json(lim_busy) and "week_peak" in limits_json(lim_busy))
+
+    ctx = build_context(dd)
+    ok("context: one record per deduplicated call", ctx.calls == 3)
+    ok("context: max context is the long call", ctx.max_context == 250_000)
+    ok("context: saving at 200k counts the one call past it",
+       any(sv.threshold == 200_000 and sv.calls_over == 1 and sv.share > 0 for sv in ctx.savings))
+    ok("context: effort levels split", {e for e, _, _ in ctx.by_effort} == {"high", "max"})
+    ok("context: skill cost measured from the growth after a lone Skill call",
+       len(ctx.skills) == 1 and ctx.skills[0].skill == "deploy-verify" and ctx.skills[0].tokens == 10_000,
+       str([(s_.skill, s_.tokens) for s_ in ctx.skills]))
+    r_ctx = render_context(ctx, color=False)
+    ok("context render: bands, savings, skills", "BY CONTEXT SIZE" in r_ctx and "/clear at" in r_ctx and "deploy-verify" in r_ctx)
+    ok("context json: shape", context_json(ctx)["skills"][0]["tokens_per_load"] == 10_000)
+    ok("context: adapters without per-call usage say so",
+       bool(build_context(hermes.load(db_path=env_db, days=30)).unsupported))
+    r_ctx_cli = subprocess.run([sys.executable, "-m", "agentburn.cli", "context", "--agent", "claude-code",
+                                "--db", dd_root, "--no-color"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli context: end-to-end", r_ctx_cli.returncode == 0 and "WHERE THE WINDOW GOES" in r_ctx_cli.stdout, r_ctx_cli.stderr[-300:])
+    r_sl = subprocess.run([sys.executable, "-m", "agentburn.cli", "statusline", "--agent", "claude-code",
+                           "--db", dd_root], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli statusline: one line", r_sl.returncode == 0 and r_sl.stdout.count("\n") == 1 and "⏳" in r_sl.stdout, r_sl.stdout)
+
+    # fix: the /clear lever and heavy skills come from the same measurements
+    from agentburn.fix import build_fixes as _bf  # noqa: E402
+    a_dd = analyze(dd)
+    dd_heavy = cc.load(db_path=dd_root, days=30, now=now)
+    from agentburn.model import SkillLoad  # noqa: E402
+    dd_heavy.skill_loads += [SkillLoad(session="s", ts=now, skill="fat-skill", tokens=20_000) for _ in range(3)]
+    fx = _bf("claude-code", dd_root, a_dd, None, dd_heavy)
+    fx_titles = " | ".join(p_.title for p_ in fx)
+    ok("fix: /clear lever proposed from measured context", "Restart sessions" in fx_titles, fx_titles)
+    ok("fix: heavy skill flagged with its measured size", "fat-skill" in " ".join(p_.why for p_ in fx), fx_titles)
+
+    # commits: join sessions to the repository's git log
+    from agentburn.commits import build_commits, render_commits, commits_json  # noqa: E402
+    git_env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                   GIT_COMMITTER_EMAIL="t@t", GIT_CONFIG_NOSYSTEM="1")
+    have_git = subprocess.run(["git", "--version"], capture_output=True).returncode == 0
+    if have_git:
+        subprocess.run(["git", "init", "-q", repo_dir], check=True, env=git_env)
+        def commit(msg, ts):
+            with open(os.path.join(repo_dir, "f.txt"), "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+            subprocess.run(["git", "-C", repo_dir, "add", "f.txt"], check=True, env=git_env)
+            stamp = str(int(ts))
+            subprocess.run(["git", "-C", repo_dir, "commit", "-q", "-m", msg], check=True,
+                           env=dict(git_env, GIT_AUTHOR_DATE=stamp, GIT_COMMITTER_DATE=stamp))
+        commit("first", t0 + 600)     # after req-1/req-2 (t0, t0+60) → costs those
+        commit("second", t0 + 1800)   # after req-3 (t0+1200) → costs that one
+        cm = build_commits(dd, since=now - 30 * 86400)
+        ok("commits: both commits priced", len(cm.top) == 2, str([(c.subject, c.weight) for c in cm.top]))
+        first = next(c for c in cm.top if c.subject == "first")
+        second = next(c for c in cm.top if c.subject == "second")
+        ok("commits: the long-context call lands on the commit that followed it",
+           second.weight > first.weight and second.calls == 1 and first.calls == 2)
+        ok("commits: everything attributed", abs(commits_json(cm)["attributed_share"] - 1.0) < 1e-6)
+        ok("commits render", "COSTLIEST COMMITS" in render_commits(cm, color=False) and "second" in render_commits(cm, color=False))
+        dd_norepo = cc.load(db_path=dd_root, days=30, now=now)
+        dd_norepo.sessions[0].project = tempfile.mkdtemp()
+        ok("commits: a session outside any repo is skipped with a reason",
+           any("not a git" in why for _, why in build_commits(dd_norepo, since=None).skipped))
+    else:
+        print("  (git not found — commits checks skipped)")
+    ok("commits: adapters without cwd say so", bool(build_commits(hermes.load(db_path=env_db, days=30)).unsupported))
+
+    # ------------------------------------------------ codex / gemini / opencode
+    print("codex: cumulative token_count delta, rate_limits, tools:")
+    from agentburn.adapters import ADAPTERS, codex, gemini, opencode  # noqa: E402
+    ok("registry: six adapters in order",
+       list(ADAPTERS) == ["hermes", "openclaw", "claude-code", "codex", "gemini", "opencode"], str(list(ADAPTERS)))
+
+    def iso(ts):
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + ".000Z"
+
+    cx_root = os.path.join(tempfile.mkdtemp(), "sessions")
+    cx_dir = os.path.join(cx_root, "2026", "09", "01")
+    os.makedirs(cx_dir)
+    cx_t0 = now - 3 * 3600
+    cx_cwd = os.path.join(tempfile.gettempdir(), "codexproj")
+
+    def cx_line(ts, kind, payload):
+        return json.dumps({"timestamp": iso(ts), "type": kind, "payload": payload})
+
+    def token_count(ts, inp, cached, out, reasoning, used=50.0):
+        tot = {"input_tokens": inp, "cached_input_tokens": cached, "output_tokens": out,
+               "reasoning_output_tokens": reasoning, "total_tokens": inp + out}
+        return cx_line(ts, "event_msg", {
+            "type": "token_count",
+            "info": {"total_token_usage": tot, "last_token_usage": tot},
+            "rate_limits": {"primary": {"used_percent": used, "window_minutes": 300, "resets_at": int(ts) + 3600},
+                            "secondary": {"used_percent": 12.0, "window_minutes": 10080, "resets_at": None}},
+        })
+
+    cx_lines = [
+        cx_line(cx_t0, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec", "cli_version": "0.144.0"}),
+        cx_line(cx_t0, "turn_context", {"model": "gpt-5.5", "effort": "high", "cwd": cx_cwd}),
+        # cumulative counter: 10k (2k cached) → 30k (12k cached) → repeat → 45k
+        token_count(cx_t0 + 10, 10_000, 2_000, 500, 100),
+        token_count(cx_t0 + 400, 30_000, 12_000, 1_500, 300),
+        token_count(cx_t0 + 401, 30_000, 12_000, 1_500, 300),   # rate-limit refresh re-sends the same totals
+        token_count(cx_t0 + 800, 45_000, 20_000, 2_500, 500, used=60.0),
+        cx_line(cx_t0 + 20, "response_item", {"type": "function_call", "name": "shell",
+                                              "arguments": json.dumps({"command": "ls -la"}), "call_id": "c1"}),
+        cx_line(cx_t0 + 21, "response_item", {"type": "function_call_output", "call_id": "c1",
+                                              "output": {"output": "x" * 400, "success": True}}),
+        cx_line(cx_t0 + 30, "response_item", {"type": "custom_tool_call", "name": "apply_patch", "input": "*** Begin"}),
+        cx_line(cx_t0 + 31, "response_item", {"type": "custom_tool_call_output", "output": "Done"}),
+        cx_line(cx_t0 + 900, "event_msg", {"type": "context_compacted"}),
+    ]
+    with open(os.path.join(cx_dir, "rollout-2026-09-01T10-00-00-abcdef.jsonl"), "w", encoding="utf-8") as f:
+        f.write("\n".join(cx_lines) + "\n")
+    # a thread that never got a reply: not a session, not an error
+    with open(os.path.join(cx_dir, "rollout-2026-09-01T11-00-00-empty.jsonl"), "w", encoding="utf-8") as f:
+        f.write(cx_line(cx_t0, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec"}) + "\n")
+    cxs = codex.load(db_path=cx_root, days=30, now=now)
+    ok("codex: one session, the empty thread skipped", len(cxs.sessions) == 1 and cxs.agent == "codex")
+    cr = cxs.sessions[0]
+    ok("codex: repeated token_count is not a call", cr.api_calls == 3, str(cr.api_calls))
+    ok("codex: deltas of the cumulative counter, cached split out of input",
+       cr.input_tokens == 25_000 and cr.cache_read_tokens == 20_000 and cr.output_tokens == 2_500
+       and cr.reasoning_tokens == 500, f"{cr.input_tokens} {cr.cache_read_tokens} {cr.output_tokens}")
+    ok("codex: model from turn_context, cwd from session_meta, cli source",
+       cr.model == "gpt-5.5" and cr.project == cx_cwd and cr.source == "cli")
+    ok("codex: title from the working directory", cr.title.startswith("codexproj/"))
+    ok("codex: no dollars", cr.cost_usd is None and cr.cost_basis == "unknown")
+    ok("codex: cells agree with the session", sum(c.cache_read_tokens for c in cxs.usage_cells) == 20_000
+       and sum(c.calls for c in cxs.usage_cells) == 3)
+    ok("codex: compaction counted", cxs.compactions.get(cr.id) == 1)
+    ok("codex: rate-limit samples kept for both windows",
+       len(cxs.rate_limits) == 8 and {r.window_minutes for r in cxs.rate_limits} == {300, 10080})
+    ok("codex: context per call with effort",
+       len(cxs.context_calls) == 3 and cxs.context_calls[0].effort == "high" and cxs.context_calls[1].context == 20_000)
+    names = [e.name for e in cxs.events]
+    ok("codex: tool calls and outputs as events", names == ["shell", "tool", "apply_patch", "tool"], str(names))
+    ok("codex: shell arg grouped on the command, output priced in tokens",
+       cxs.events[0].arg_key and "ls" in cxs.events[0].arg_key and cxs.events[1].ok is True and cxs.events[1].tokens == 107)
+    ok("codex: warning about no local prices", any("dollars" in w for w in cxs.warnings))
+    lim_cx = build_limits(cxs, now=now)
+    ok("codex limits: ceiling from the provider's used_percent",
+       lim_cx.ceiling_source == "provider" and lim_cx.ceiling and lim_cx.ceiling > 0, lim_cx.ceiling_source)
+    ok("codex limits: latest provider reading per window",
+       [(wm, u) for wm, u, _ in lim_cx.provider_used] == [(300, 60.0), (10080, 12.0)], str(lim_cx.provider_used))
+    ok("codex limits render: provider line", "provider says" in render_limits(lim_cx, color=False))
+    ok("codex limits: week ceiling from the weekly window", lim_cx.week_ceiling is not None and lim_cx.week_ceiling > 0)
+    ok("codex limits: peak inside the readings' coverage → no staleness note", not lim_cx.notes, str(lim_cx.notes))
+    # readings stop, then a bigger peak happens: the ratio must be flagged, not sold as an overrun
+    from agentburn.model import RateLimitSample as _RLS, UsageCell as _UC  # noqa: E402
+    cx_stale = codex.load(db_path=cx_root, days=30, now=now)
+    cx_stale.usage_cells.append(_UC(start=int((cx_t0 + 7 * 3600) // 300) * 300, source="desktop", model="gpt-5.5",
+                                    calls=5, input_tokens=900_000, output_tokens=50_000, cache_read_tokens=0,
+                                    cache_write_tokens=0, session="later"))
+    lim_stale = build_limits(cx_stale, now=now)
+    ok("codex limits: peak after the last 5h reading is flagged as unmeasured",
+       lim_stale.ceiling_source == "provider" and any("last 5h reading" in n_ for n_ in lim_stale.notes), str(lim_stale.notes))
+    # a 30-day reading is not a weekly ceiling
+    cx_30d = codex.load(db_path=cx_root, days=30, now=now)
+    cx_30d.rate_limits = [r for r in cx_30d.rate_limits if r.window_minutes == 300]
+    cx_30d.rate_limits.append(_RLS(ts=cx_t0 + 800, window_minutes=43_200, used_percent=90.0, resets_at=None))
+    ok("codex limits: a 30-day reading does not become the weekly ceiling",
+       build_limits(cx_30d, now=now).week_ceiling is None)
+    try:
+        codex.load(db_path=cx_root, days=1, now=now + 10 * 86400)
+        ok("codex: empty window raises", False)
+    except RuntimeError as e:
+        ok("codex: empty window raises with a hint", "--days 0" in str(e))
+    r_cx = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "codex", "--db", cx_root, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli codex: end-to-end", r_cx.returncode == 0 and "gpt-5.5" in r_cx.stdout, (r_cx.stdout + r_cx.stderr)[-400:])
+
+    print("gemini: per-turn tokens, projects.json label→cwd, toolCalls:")
+    gm_home = tempfile.mkdtemp()
+    gm_root = os.path.join(gm_home, "tmp")
+    gm_cwd = os.path.join(tempfile.gettempdir(), "geminiproj")
+    os.makedirs(os.path.join(gm_root, "proj", "chats"))
+    os.makedirs(os.path.join(gm_root, "orphan", "chats"))
+    with open(os.path.join(gm_home, "projects.json"), "w", encoding="utf-8") as f:
+        json.dump({"projects": {gm_cwd: "proj"}}, f)
+    gm_t0 = now - 2 * 3600
+
+    def gm_msg(ts, model, inp, cached, out, thoughts, tool_calls=None):
+        return {"type": "gemini", "model": model, "timestamp": iso(ts), "content": "…",
+                "tokens": {"input": inp, "output": out, "cached": cached, "thoughts": thoughts, "tool": 0,
+                           "total": inp + out + thoughts},
+                "toolCalls": tool_calls or []}
+
+    gm_doc = {"sessionId": "11111111-aaaa-4bbb-8ccc-000000000001", "projectHash": "h", "kind": "main",
+              "startTime": iso(gm_t0), "lastUpdated": iso(gm_t0 + 700),
+              "messages": [
+                  {"type": "user", "timestamp": iso(gm_t0), "content": "hi"},
+                  gm_msg(gm_t0 + 5, "gemini-2.5-pro", 8_000, 3_000, 400, 200,
+                         [{"name": "read_file", "args": {"path": "/x/y.py"}, "status": "success", "result": {"o": "z" * 200}}]),
+                  gm_msg(gm_t0 + 400, "gemini-2.5-pro", 20_000, 15_000, 600, 100,
+                         [{"name": "run_shell_command", "args": {"command": "pytest"}, "status": "error", "result": "boom"}]),
+              ]}
+    with open(os.path.join(gm_root, "proj", "chats", "session-2026-09-01T10-00-00-abc.json"), "w", encoding="utf-8") as f:
+        json.dump(gm_doc, f)
+    with open(os.path.join(gm_root, "orphan", "chats", "session-2026-09-01T12-00-00-def.json"), "w", encoding="utf-8") as f:
+        json.dump({"sessionId": "22222222-aaaa-4bbb-8ccc-000000000002", "kind": "subagent", "startTime": iso(gm_t0),
+                   "lastUpdated": iso(gm_t0 + 5),
+                   "messages": [gm_msg(gm_t0 + 5, "gemini-2.5-flash", 1_000, 0, 50, 0)]}, f)
+    with open(os.path.join(gm_root, "proj", "chats", "session-2026-09-01T13-00-00-nil.json"), "w", encoding="utf-8") as f:
+        json.dump({"sessionId": "3", "kind": "main", "messages": [{"type": "user", "timestamp": iso(gm_t0), "content": "?"}]}, f)
+    gms = gemini.load(db_path=gm_root, days=30, now=now)
+    ok("gemini: two sessions with usage, the reply-less chat skipped", len(gms.sessions) == 2 and gms.agent == "gemini")
+    gr = next(s_ for s_ in gms.sessions if s_.id.endswith("0001"))
+    go = next(s_ for s_ in gms.sessions if s_.id.endswith("0002"))
+    ok("gemini: cwd resolved through projects.json by label", gr.project == gm_cwd, str(gr.project))
+    ok("gemini: unknown label → no project, not a crash", go.project is None)
+    ok("gemini: per-turn tokens summed, cached split out of input",
+       gr.api_calls == 2 and gr.input_tokens == 10_000 and gr.cache_read_tokens == 18_000
+       and gr.output_tokens == 1_000 and gr.reasoning_tokens == 300,
+       f"{gr.input_tokens} {gr.cache_read_tokens} {gr.output_tokens} {gr.reasoning_tokens}")
+    ok("gemini: model and title", gr.model == "gemini-2.5-pro" and gr.title.startswith("proj/"))
+    ok("gemini: kind main → cli, other kinds → subagent", gr.source == "cli" and go.source == "subagent")
+    ok("gemini: time span from the messages", gr.started_at is not None and gr.ended_at - gr.started_at >= 700)
+    ok("gemini: cells carry thoughts as output",
+       sum(c.output_tokens for c in gms.usage_cells if c.session == gr.id) == 1_300)
+    ok("gemini: context per call in whole input", any(c.context == 20_000 for c in gms.context_calls))
+    ev = [e for e in gms.events if e.session_id == gr.id]
+    ok("gemini: two events per tool call — the call and its result",
+       [e.name for e in ev] == ["read_file", "read_file", "run_shell_command", "run_shell_command"], str([e.name for e in ev]))
+    ok("gemini: status → ok, result sized in tokens",
+       ev[1].ok is True and ev[1].tokens and ev[1].tokens > 40 and ev[3].ok is False)
+    ok("gemini: no dollars", gr.cost_usd is None and any("dollars" in w for w in gms.warnings))
+    try:
+        gemini.load(db_path=gm_root, days=1, now=now + 10 * 86400)
+        ok("gemini: empty window raises", False)
+    except RuntimeError as e:
+        ok("gemini: empty window raises with a hint", "--days 0" in str(e))
+    r_gm = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "gemini", "--db", gm_root, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli gemini: end-to-end", r_gm.returncode == 0 and "gemini-2.5-pro" in r_gm.stdout, (r_gm.stdout + r_gm.stderr)[-400:])
+
+    print("opencode: sqlite session/message/part, agent-priced cost:")
+    oc_path = os.path.join(tempfile.mkdtemp(), "opencode.db")
+    oc_t0_ms = int((now - 3600) * 1000)
+    ocon = sqlite3.connect(oc_path)
+    ocon.executescript(
+        """
+        CREATE TABLE session(id TEXT PRIMARY KEY, parent_id TEXT, directory TEXT, title TEXT, model TEXT,
+                             cost REAL, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part(id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        """
+    )
+
+    def oc_msg(role, i_, o_, rs, cr, cw, cost, provider="anthropic", model="claude-sonnet-5"):
+        return json.dumps({"role": role, "modelID": model, "providerID": provider, "cost": cost,
+                           "tokens": {"input": i_, "output": o_, "reasoning": rs, "cache": {"read": cr, "write": cw}}})
+
+    ocon.executemany("INSERT INTO session VALUES (?,?,?,?,?,?,?,?)", [
+        ("ses_main", None, "/w/repo", "Fix the build", "anthropic/claude-sonnet-5", 0.5, oc_t0_ms, oc_t0_ms + 900_000),
+        ("ses_sub", "ses_main", "/w/repo", "explore", "ollama/llama", 0.0, oc_t0_ms, oc_t0_ms + 900_000),
+        ("ses_old", None, "/w/old", "ancient", None, 0.0, oc_t0_ms - 90 * 86400_000, oc_t0_ms - 90 * 86400_000),
+        ("ses_bare", None, "/w/repo", "no reply yet", None, 0.0, oc_t0_ms, oc_t0_ms),
+    ])
+    ocon.executemany("INSERT INTO message VALUES (?,?,?,?)", [
+        ("m1", "ses_main", oc_t0_ms, json.dumps({"role": "user"})),
+        ("m2", "ses_main", oc_t0_ms + 1_000, oc_msg("assistant", 5_000, 300, 50, 20_000, 1_000, 0.10)),
+        ("m3", "ses_main", oc_t0_ms + 400_000, oc_msg("assistant", 6_000, 700, 0, 25_000, 0, 0.15)),
+        ("m4", "ses_sub", oc_t0_ms + 2_000, oc_msg("assistant", 1_000, 100, 0, 0, 0, 0.0, "ollama", "llama3")),
+        ("m5", "ses_old", oc_t0_ms - 90 * 86400_000, oc_msg("assistant", 9, 9, 0, 0, 0, 9.0)),
+    ])
+    ocon.executemany("INSERT INTO part VALUES (?,?,?,?,?)", [
+        ("p1", "m2", "ses_main", oc_t0_ms + 1_500, json.dumps({"type": "tool", "tool": "bash",
+                                                              "state": {"status": "completed", "input": {"command": "make"},
+                                                                        "output": "o" * 800}})),
+        ("p2", "m2", "ses_main", oc_t0_ms + 1_600, json.dumps({"type": "text", "text": "…"})),
+        ("p3", "m3", "ses_main", oc_t0_ms + 400_500, json.dumps({"type": "tool", "tool": "read",
+                                                                "state": {"status": "error", "input": {"filePath": "/w/x"}}})),
+    ])
+    ocon.commit()
+    ocon.close()
+    ocs = opencode.load(db_path=oc_path, days=30, now=now)
+    ok("opencode: sessions in the window with assistant replies only",
+       sorted(s_.id for s_ in ocs.sessions) == ["ses_main", "ses_sub"], str([s_.id for s_ in ocs.sessions]))
+    om = next(s_ for s_ in ocs.sessions if s_.id == "ses_main")
+    osb = next(s_ for s_ in ocs.sessions if s_.id == "ses_sub")
+    ok("opencode: tokens summed, cache read/write kept apart",
+       om.api_calls == 2 and om.input_tokens == 11_000 and om.output_tokens == 1_000 and om.reasoning_tokens == 50
+       and om.cache_read_tokens == 45_000 and om.cache_write_tokens == 1_000, f"{om.input_tokens} {om.cache_read_tokens}")
+    ok("opencode: cost is the agent's own, basis actual", abs(om.cost_usd - 0.25) < 1e-9 and om.cost_basis == "actual")
+    ok("opencode: zero-cost provider → tokens only, basis unknown", osb.cost_usd is None and osb.cost_basis == "unknown")
+    ok("opencode: model qualified with provider", om.model == "anthropic/claude-sonnet-5" and om.provider == "anthropic")
+    ok("opencode: parent_id → subagent, directory → project",
+       osb.source == "subagent" and osb.parent_id == "ses_main" and om.project == "/w/repo" and om.title == "Fix the build")
+    ok("opencode: one cell per assistant message, reasoning inside output",
+       sum(c.calls for c in ocs.usage_cells) == 3 and sum(c.output_tokens for c in ocs.usage_cells if c.session == om.id) == 1_050)
+    ok("opencode: context = input + cache read + cache write", any(c.context == 26_000 for c in ocs.context_calls))
+    oev = [e for e in ocs.events if e.session_id == om.id]
+    ok("opencode: tool parts → events, text parts ignored",
+       [e.name for e in oev] == ["bash", "bash", "read", "read"], str([e.name for e in oev]))
+    ok("opencode: status and output size on the result event",
+       oev[1].ok is True and oev[1].tokens == 200 and oev[3].ok is False and oev[3].tokens is None)
+    ok("opencode: unpriced sessions warned", any("no cost" in w for w in ocs.warnings))
+    ok("opencode: read-only — the db file is untouched", not os.path.exists(oc_path + "-journal"))
+    try:
+        opencode.load(db_path=oc_path, days=1, now=now + 10 * 86400)
+        ok("opencode: empty window raises", False)
+    except RuntimeError as e:
+        ok("opencode: empty window raises with a hint", "--days 0" in str(e))
+    a_oc = analyze(ocs)
+    ok("opencode analyze: dollars flow through, basis mixed", a_oc.cost_basis in ("actual", "mixed") and a_oc.daily_cost)
+    r_oc = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "opencode", "--db", oc_path, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli opencode: end-to-end", r_oc.returncode == 0 and "Fix the build" in r_oc.stdout, (r_oc.stdout + r_oc.stderr)[-400:])
+
+    print("cli: one empty adapter does not sink the others:")
+    import shutil
+    mh = tempfile.mkdtemp()
+    shutil.copytree(dd_root, os.path.join(mh, ".claude", "projects"))
+    mh_cx = os.path.join(mh, ".codex", "sessions", "2026", "09", "01")
+    os.makedirs(mh_cx)
+    with open(os.path.join(mh_cx, "rollout-2026-09-01T09-00-00-bare.jsonl"), "w", encoding="utf-8") as f:
+        f.write(cx_line(now - 60, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec"}) + "\n")
+    r_multi = subprocess.run([sys.executable, "-m", "agentburn.cli", "--no-color"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli multi: claude-code report printed although codex had nothing, header counts only the loaded",
+       r_multi.returncode == 0 and "Found" not in r_multi.stdout and "codex" in r_multi.stderr
+       and "skipped" in r_multi.stderr, (r_multi.stdout + r_multi.stderr)[-400:])
+    r_multi_lim = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--no-color"], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli multi limits: same tolerance", r_multi_lim.returncode == 0 and "codex" in r_multi_lim.stderr,
+       (r_multi_lim.stdout + r_multi_lim.stderr)[-400:])
+    r_single = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "codex", "--no-color"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli --agent codex alone: still an error with the hint", r_single.returncode == 2 and "--days 0" in r_single.stderr,
+       r_single.stderr[-300:])
+
+    print("doctor: agents without local prices are not 'unpriced':")
+    from agentburn.doctor import render_doctor as _rd  # noqa: E402
+    for name_, snap_ in (("codex", cxs), ("gemini", gms)):
+        doc_ = _rd(snap_, color=False)
+        ok(f"doctor {name_}: healthy, no fake pricing gap, no issue template",
+           "healthy" in doc_ and "by design" in doc_ and "GitHub issue" not in doc_, doc_[-300:])
+    doc_oc = _rd(ocs, color=False)
+    ok("doctor opencode: a zero-cost provider IS reported as unpriced",
+       "1 × ollama" in doc_oc and "unpriced sessions  : 1" in doc_oc, doc_oc[-400:])
 
     # ------------------------------------------------- fix for claude code
     print("fix (claude-code levers):")
