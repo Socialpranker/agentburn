@@ -29,6 +29,12 @@ database read-only. Use it instead of guessing about costs.
    the pace of the last 30 minutes. If there is no ceiling and the user
    remembers when they were cut off, re-run with `--hit "YYYY-MM-DD HH:MM"`.
    Never state an absolute limit: the provider's formula is not public.
+   Codex CLI: `ceiling_source: provider` means the ceiling comes from the
+   `used_percent` Codex records itself — an estimate, other devices on the
+   account count too; `provider_used` is the latest raw reading.
+   Gemini CLI and opencode: tokens only (opencode carries its own costs
+   when the provider is priced); no cut-offs are recorded, so `ceiling`
+   is absent unless `--hit` names one.
 4b. For "why is my context so big / should I /clear / what does skill X
    cost": run `uvx agentburn context --json` and read `bands`, `savings`
    (`clear_at` → `share_not_spent`), `longest_sessions`, `by_effort`,

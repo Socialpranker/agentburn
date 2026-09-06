@@ -1225,6 +1225,265 @@ def main():
         print("  (git not found — commits checks skipped)")
     ok("commits: adapters without cwd say so", bool(build_commits(hermes.load(db_path=env_db, days=30)).unsupported))
 
+    # ------------------------------------------------ codex / gemini / opencode
+    print("codex: cumulative token_count delta, rate_limits, tools:")
+    from agentburn.adapters import ADAPTERS, codex, gemini, opencode  # noqa: E402
+    ok("registry: six adapters in order",
+       list(ADAPTERS) == ["hermes", "openclaw", "claude-code", "codex", "gemini", "opencode"], str(list(ADAPTERS)))
+
+    def iso(ts):
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(ts)) + ".000Z"
+
+    cx_root = os.path.join(tempfile.mkdtemp(), "sessions")
+    cx_dir = os.path.join(cx_root, "2026", "09", "01")
+    os.makedirs(cx_dir)
+    cx_t0 = now - 3 * 3600
+    cx_cwd = os.path.join(tempfile.gettempdir(), "codexproj")
+
+    def cx_line(ts, kind, payload):
+        return json.dumps({"timestamp": iso(ts), "type": kind, "payload": payload})
+
+    def token_count(ts, inp, cached, out, reasoning, used=50.0):
+        tot = {"input_tokens": inp, "cached_input_tokens": cached, "output_tokens": out,
+               "reasoning_output_tokens": reasoning, "total_tokens": inp + out}
+        return cx_line(ts, "event_msg", {
+            "type": "token_count",
+            "info": {"total_token_usage": tot, "last_token_usage": tot},
+            "rate_limits": {"primary": {"used_percent": used, "window_minutes": 300, "resets_at": int(ts) + 3600},
+                            "secondary": {"used_percent": 12.0, "window_minutes": 10080, "resets_at": None}},
+        })
+
+    cx_lines = [
+        cx_line(cx_t0, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec", "cli_version": "0.144.0"}),
+        cx_line(cx_t0, "turn_context", {"model": "gpt-5.5", "effort": "high", "cwd": cx_cwd}),
+        # cumulative counter: 10k (2k cached) → 30k (12k cached) → repeat → 45k
+        token_count(cx_t0 + 10, 10_000, 2_000, 500, 100),
+        token_count(cx_t0 + 400, 30_000, 12_000, 1_500, 300),
+        token_count(cx_t0 + 401, 30_000, 12_000, 1_500, 300),   # rate-limit refresh re-sends the same totals
+        token_count(cx_t0 + 800, 45_000, 20_000, 2_500, 500, used=60.0),
+        cx_line(cx_t0 + 20, "response_item", {"type": "function_call", "name": "shell",
+                                              "arguments": json.dumps({"command": "ls -la"}), "call_id": "c1"}),
+        cx_line(cx_t0 + 21, "response_item", {"type": "function_call_output", "call_id": "c1",
+                                              "output": {"output": "x" * 400, "success": True}}),
+        cx_line(cx_t0 + 30, "response_item", {"type": "custom_tool_call", "name": "apply_patch", "input": "*** Begin"}),
+        cx_line(cx_t0 + 31, "response_item", {"type": "custom_tool_call_output", "output": "Done"}),
+        cx_line(cx_t0 + 900, "event_msg", {"type": "context_compacted"}),
+    ]
+    with open(os.path.join(cx_dir, "rollout-2026-09-01T10-00-00-abcdef.jsonl"), "w", encoding="utf-8") as f:
+        f.write("\n".join(cx_lines) + "\n")
+    # a thread that never got a reply: not a session, not an error
+    with open(os.path.join(cx_dir, "rollout-2026-09-01T11-00-00-empty.jsonl"), "w", encoding="utf-8") as f:
+        f.write(cx_line(cx_t0, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec"}) + "\n")
+    cxs = codex.load(db_path=cx_root, days=30, now=now)
+    ok("codex: one session, the empty thread skipped", len(cxs.sessions) == 1 and cxs.agent == "codex")
+    cr = cxs.sessions[0]
+    ok("codex: repeated token_count is not a call", cr.api_calls == 3, str(cr.api_calls))
+    ok("codex: deltas of the cumulative counter, cached split out of input",
+       cr.input_tokens == 25_000 and cr.cache_read_tokens == 20_000 and cr.output_tokens == 2_500
+       and cr.reasoning_tokens == 500, f"{cr.input_tokens} {cr.cache_read_tokens} {cr.output_tokens}")
+    ok("codex: model from turn_context, cwd from session_meta, cli source",
+       cr.model == "gpt-5.5" and cr.project == cx_cwd and cr.source == "cli")
+    ok("codex: title from the working directory", cr.title.startswith("codexproj/"))
+    ok("codex: no dollars", cr.cost_usd is None and cr.cost_basis == "unknown")
+    ok("codex: cells agree with the session", sum(c.cache_read_tokens for c in cxs.usage_cells) == 20_000
+       and sum(c.calls for c in cxs.usage_cells) == 3)
+    ok("codex: compaction counted", cxs.compactions.get(cr.id) == 1)
+    ok("codex: rate-limit samples kept for both windows",
+       len(cxs.rate_limits) == 8 and {r.window_minutes for r in cxs.rate_limits} == {300, 10080})
+    ok("codex: context per call with effort",
+       len(cxs.context_calls) == 3 and cxs.context_calls[0].effort == "high" and cxs.context_calls[1].context == 20_000)
+    names = [e.name for e in cxs.events]
+    ok("codex: tool calls and outputs as events", names == ["shell", "tool", "apply_patch", "tool"], str(names))
+    ok("codex: shell arg grouped on the command, output priced in tokens",
+       cxs.events[0].arg_key and "ls" in cxs.events[0].arg_key and cxs.events[1].ok is True and cxs.events[1].tokens == 107)
+    ok("codex: warning about no local prices", any("dollars" in w for w in cxs.warnings))
+    lim_cx = build_limits(cxs, now=now)
+    ok("codex limits: ceiling from the provider's used_percent",
+       lim_cx.ceiling_source == "provider" and lim_cx.ceiling and lim_cx.ceiling > 0, lim_cx.ceiling_source)
+    ok("codex limits: latest provider reading per window",
+       [(wm, u) for wm, u, _ in lim_cx.provider_used] == [(300, 60.0), (10080, 12.0)], str(lim_cx.provider_used))
+    ok("codex limits render: provider line", "provider says" in render_limits(lim_cx, color=False))
+    ok("codex: ~ only 5h window makes the ceiling; week from the weekly window",
+       lim_cx.week_ceiling is not None and lim_cx.week_ceiling > 0)
+    try:
+        codex.load(db_path=cx_root, days=1, now=now + 10 * 86400)
+        ok("codex: empty window raises", False)
+    except RuntimeError as e:
+        ok("codex: empty window raises with a hint", "--days 0" in str(e))
+    r_cx = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "codex", "--db", cx_root, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli codex: end-to-end", r_cx.returncode == 0 and "gpt-5.5" in r_cx.stdout, (r_cx.stdout + r_cx.stderr)[-400:])
+
+    print("gemini: per-turn tokens, projects.json label→cwd, toolCalls:")
+    gm_home = tempfile.mkdtemp()
+    gm_root = os.path.join(gm_home, "tmp")
+    gm_cwd = os.path.join(tempfile.gettempdir(), "geminiproj")
+    os.makedirs(os.path.join(gm_root, "proj", "chats"))
+    os.makedirs(os.path.join(gm_root, "orphan", "chats"))
+    with open(os.path.join(gm_home, "projects.json"), "w", encoding="utf-8") as f:
+        json.dump({"projects": {gm_cwd: "proj"}}, f)
+    gm_t0 = now - 2 * 3600
+
+    def gm_msg(ts, model, inp, cached, out, thoughts, tool_calls=None):
+        return {"type": "gemini", "model": model, "timestamp": iso(ts), "content": "…",
+                "tokens": {"input": inp, "output": out, "cached": cached, "thoughts": thoughts, "tool": 0,
+                           "total": inp + out + thoughts},
+                "toolCalls": tool_calls or []}
+
+    gm_doc = {"sessionId": "11111111-aaaa-4bbb-8ccc-000000000001", "projectHash": "h", "kind": "main",
+              "startTime": iso(gm_t0), "lastUpdated": iso(gm_t0 + 700),
+              "messages": [
+                  {"type": "user", "timestamp": iso(gm_t0), "content": "hi"},
+                  gm_msg(gm_t0 + 5, "gemini-2.5-pro", 8_000, 3_000, 400, 200,
+                         [{"name": "read_file", "args": {"path": "/x/y.py"}, "status": "success", "result": {"o": "z" * 200}}]),
+                  gm_msg(gm_t0 + 400, "gemini-2.5-pro", 20_000, 15_000, 600, 100,
+                         [{"name": "run_shell_command", "args": {"command": "pytest"}, "status": "error", "result": "boom"}]),
+              ]}
+    with open(os.path.join(gm_root, "proj", "chats", "session-2026-09-01T10-00-00-abc.json"), "w", encoding="utf-8") as f:
+        json.dump(gm_doc, f)
+    with open(os.path.join(gm_root, "orphan", "chats", "session-2026-09-01T12-00-00-def.json"), "w", encoding="utf-8") as f:
+        json.dump({"sessionId": "22222222-aaaa-4bbb-8ccc-000000000002", "kind": "subagent", "startTime": iso(gm_t0),
+                   "lastUpdated": iso(gm_t0 + 5),
+                   "messages": [gm_msg(gm_t0 + 5, "gemini-2.5-flash", 1_000, 0, 50, 0)]}, f)
+    with open(os.path.join(gm_root, "proj", "chats", "session-2026-09-01T13-00-00-nil.json"), "w", encoding="utf-8") as f:
+        json.dump({"sessionId": "3", "kind": "main", "messages": [{"type": "user", "timestamp": iso(gm_t0), "content": "?"}]}, f)
+    gms = gemini.load(db_path=gm_root, days=30, now=now)
+    ok("gemini: two sessions with usage, the reply-less chat skipped", len(gms.sessions) == 2 and gms.agent == "gemini")
+    gr = next(s_ for s_ in gms.sessions if s_.id.endswith("0001"))
+    go = next(s_ for s_ in gms.sessions if s_.id.endswith("0002"))
+    ok("gemini: cwd resolved through projects.json by label", gr.project == gm_cwd, str(gr.project))
+    ok("gemini: unknown label → no project, not a crash", go.project is None)
+    ok("gemini: per-turn tokens summed, cached split out of input",
+       gr.api_calls == 2 and gr.input_tokens == 10_000 and gr.cache_read_tokens == 18_000
+       and gr.output_tokens == 1_000 and gr.reasoning_tokens == 300,
+       f"{gr.input_tokens} {gr.cache_read_tokens} {gr.output_tokens} {gr.reasoning_tokens}")
+    ok("gemini: model and title", gr.model == "gemini-2.5-pro" and gr.title.startswith("proj/"))
+    ok("gemini: kind main → cli, other kinds → subagent", gr.source == "cli" and go.source == "subagent")
+    ok("gemini: time span from the messages", gr.started_at is not None and gr.ended_at - gr.started_at >= 700)
+    ok("gemini: cells carry thoughts as output",
+       sum(c.output_tokens for c in gms.usage_cells if c.session == gr.id) == 1_300)
+    ok("gemini: context per call in whole input", any(c.context == 20_000 for c in gms.context_calls))
+    ev = [e for e in gms.events if e.session_id == gr.id]
+    ok("gemini: two events per tool call — the call and its result",
+       [e.name for e in ev] == ["read_file", "read_file", "run_shell_command", "run_shell_command"], str([e.name for e in ev]))
+    ok("gemini: status → ok, result sized in tokens",
+       ev[1].ok is True and ev[1].tokens and ev[1].tokens > 40 and ev[3].ok is False)
+    ok("gemini: no dollars", gr.cost_usd is None and any("dollars" in w for w in gms.warnings))
+    try:
+        gemini.load(db_path=gm_root, days=1, now=now + 10 * 86400)
+        ok("gemini: empty window raises", False)
+    except RuntimeError as e:
+        ok("gemini: empty window raises with a hint", "--days 0" in str(e))
+    r_gm = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "gemini", "--db", gm_root, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli gemini: end-to-end", r_gm.returncode == 0 and "gemini-2.5-pro" in r_gm.stdout, (r_gm.stdout + r_gm.stderr)[-400:])
+
+    print("opencode: sqlite session/message/part, agent-priced cost:")
+    oc_path = os.path.join(tempfile.mkdtemp(), "opencode.db")
+    oc_t0_ms = int((now - 3600) * 1000)
+    ocon = sqlite3.connect(oc_path)
+    ocon.executescript(
+        """
+        CREATE TABLE session(id TEXT PRIMARY KEY, parent_id TEXT, directory TEXT, title TEXT, model TEXT,
+                             cost REAL, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE message(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+        CREATE TABLE part(id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, data TEXT);
+        """
+    )
+
+    def oc_msg(role, i_, o_, rs, cr, cw, cost, provider="anthropic", model="claude-sonnet-5"):
+        return json.dumps({"role": role, "modelID": model, "providerID": provider, "cost": cost,
+                           "tokens": {"input": i_, "output": o_, "reasoning": rs, "cache": {"read": cr, "write": cw}}})
+
+    ocon.executemany("INSERT INTO session VALUES (?,?,?,?,?,?,?,?)", [
+        ("ses_main", None, "/w/repo", "Fix the build", "anthropic/claude-sonnet-5", 0.5, oc_t0_ms, oc_t0_ms + 900_000),
+        ("ses_sub", "ses_main", "/w/repo", "explore", "ollama/llama", 0.0, oc_t0_ms, oc_t0_ms + 900_000),
+        ("ses_old", None, "/w/old", "ancient", None, 0.0, oc_t0_ms - 90 * 86400_000, oc_t0_ms - 90 * 86400_000),
+        ("ses_bare", None, "/w/repo", "no reply yet", None, 0.0, oc_t0_ms, oc_t0_ms),
+    ])
+    ocon.executemany("INSERT INTO message VALUES (?,?,?,?)", [
+        ("m1", "ses_main", oc_t0_ms, json.dumps({"role": "user"})),
+        ("m2", "ses_main", oc_t0_ms + 1_000, oc_msg("assistant", 5_000, 300, 50, 20_000, 1_000, 0.10)),
+        ("m3", "ses_main", oc_t0_ms + 400_000, oc_msg("assistant", 6_000, 700, 0, 25_000, 0, 0.15)),
+        ("m4", "ses_sub", oc_t0_ms + 2_000, oc_msg("assistant", 1_000, 100, 0, 0, 0, 0.0, "ollama", "llama3")),
+        ("m5", "ses_old", oc_t0_ms - 90 * 86400_000, oc_msg("assistant", 9, 9, 0, 0, 0, 9.0)),
+    ])
+    ocon.executemany("INSERT INTO part VALUES (?,?,?,?,?)", [
+        ("p1", "m2", "ses_main", oc_t0_ms + 1_500, json.dumps({"type": "tool", "tool": "bash",
+                                                              "state": {"status": "completed", "input": {"command": "make"},
+                                                                        "output": "o" * 800}})),
+        ("p2", "m2", "ses_main", oc_t0_ms + 1_600, json.dumps({"type": "text", "text": "…"})),
+        ("p3", "m3", "ses_main", oc_t0_ms + 400_500, json.dumps({"type": "tool", "tool": "read",
+                                                                "state": {"status": "error", "input": {"filePath": "/w/x"}}})),
+    ])
+    ocon.commit()
+    ocon.close()
+    ocs = opencode.load(db_path=oc_path, days=30, now=now)
+    ok("opencode: sessions in the window with assistant replies only",
+       sorted(s_.id for s_ in ocs.sessions) == ["ses_main", "ses_sub"], str([s_.id for s_ in ocs.sessions]))
+    om = next(s_ for s_ in ocs.sessions if s_.id == "ses_main")
+    osb = next(s_ for s_ in ocs.sessions if s_.id == "ses_sub")
+    ok("opencode: tokens summed, cache read/write kept apart",
+       om.api_calls == 2 and om.input_tokens == 11_000 and om.output_tokens == 1_000 and om.reasoning_tokens == 50
+       and om.cache_read_tokens == 45_000 and om.cache_write_tokens == 1_000, f"{om.input_tokens} {om.cache_read_tokens}")
+    ok("opencode: cost is the agent's own, basis actual", abs(om.cost_usd - 0.25) < 1e-9 and om.cost_basis == "actual")
+    ok("opencode: zero-cost provider → tokens only, basis unknown", osb.cost_usd is None and osb.cost_basis == "unknown")
+    ok("opencode: model qualified with provider", om.model == "anthropic/claude-sonnet-5" and om.provider == "anthropic")
+    ok("opencode: parent_id → subagent, directory → project",
+       osb.source == "subagent" and osb.parent_id == "ses_main" and om.project == "/w/repo" and om.title == "Fix the build")
+    ok("opencode: one cell per assistant message, reasoning inside output",
+       sum(c.calls for c in ocs.usage_cells) == 3 and sum(c.output_tokens for c in ocs.usage_cells if c.session == om.id) == 1_050)
+    ok("opencode: context = input + cache read + cache write", any(c.context == 26_000 for c in ocs.context_calls))
+    oev = [e for e in ocs.events if e.session_id == om.id]
+    ok("opencode: tool parts → events, text parts ignored",
+       [e.name for e in oev] == ["bash", "bash", "read", "read"], str([e.name for e in oev]))
+    ok("opencode: status and output size on the result event",
+       oev[1].ok is True and oev[1].tokens == 200 and oev[3].ok is False and oev[3].tokens is None)
+    ok("opencode: unpriced sessions warned", any("no cost" in w for w in ocs.warnings))
+    ok("opencode: read-only — the db file is untouched", not os.path.exists(oc_path + "-journal"))
+    try:
+        opencode.load(db_path=oc_path, days=1, now=now + 10 * 86400)
+        ok("opencode: empty window raises", False)
+    except RuntimeError as e:
+        ok("opencode: empty window raises with a hint", "--days 0" in str(e))
+    a_oc = analyze(ocs)
+    ok("opencode analyze: dollars flow through, basis mixed", a_oc.cost_basis in ("actual", "mixed") and a_oc.daily_cost)
+    r_oc = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "opencode", "--db", oc_path, "--no-color"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    ok("cli opencode: end-to-end", r_oc.returncode == 0 and "Fix the build" in r_oc.stdout, (r_oc.stdout + r_oc.stderr)[-400:])
+
+    print("cli: one empty adapter does not sink the others:")
+    import shutil
+    mh = tempfile.mkdtemp()
+    shutil.copytree(dd_root, os.path.join(mh, ".claude", "projects"))
+    mh_cx = os.path.join(mh, ".codex", "sessions", "2026", "09", "01")
+    os.makedirs(mh_cx)
+    with open(os.path.join(mh_cx, "rollout-2026-09-01T09-00-00-bare.jsonl"), "w", encoding="utf-8") as f:
+        f.write(cx_line(now - 60, "session_meta", {"cwd": cx_cwd, "originator": "codex_exec"}) + "\n")
+    r_multi = subprocess.run([sys.executable, "-m", "agentburn.cli", "--no-color"], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli multi: claude-code report printed although codex had nothing, header counts only the loaded",
+       r_multi.returncode == 0 and "Found" not in r_multi.stdout and "codex" in r_multi.stderr
+       and "skipped" in r_multi.stderr, (r_multi.stdout + r_multi.stderr)[-400:])
+    r_multi_lim = subprocess.run([sys.executable, "-m", "agentburn.cli", "limits", "--no-color"], capture_output=True,
+                                 text=True, encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli multi limits: same tolerance", r_multi_lim.returncode == 0 and "codex" in r_multi_lim.stderr,
+       (r_multi_lim.stdout + r_multi_lim.stderr)[-400:])
+    r_single = subprocess.run([sys.executable, "-m", "agentburn.cli", "--agent", "codex", "--no-color"],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=fake_home(mh))
+    ok("cli --agent codex alone: still an error with the hint", r_single.returncode == 2 and "--days 0" in r_single.stderr,
+       r_single.stderr[-300:])
+
+    print("doctor: agents without local prices are not 'unpriced':")
+    from agentburn.doctor import render_doctor as _rd  # noqa: E402
+    for name_, snap_ in (("codex", cxs), ("gemini", gms)):
+        doc_ = _rd(snap_, color=False)
+        ok(f"doctor {name_}: healthy, no fake pricing gap, no issue template",
+           "healthy" in doc_ and "by design" in doc_ and "GitHub issue" not in doc_, doc_[-300:])
+    doc_oc = _rd(ocs, color=False)
+    ok("doctor opencode: a zero-cost provider IS reported as unpriced",
+       "1 × ollama" in doc_oc and "unpriced sessions  : 1" in doc_oc, doc_oc[-400:])
+
     # ------------------------------------------------- fix for claude code
     print("fix (claude-code levers):")
     from agentburn.fix import build_fixes, render_fixes  # noqa: E402

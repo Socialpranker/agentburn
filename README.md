@@ -16,7 +16,7 @@
 
 <br>
 
-**[Claude Code](#supported-agents) · [OpenClaw](#supported-agents) · [Hermes Agent](#supported-agents)** — one normalized core, local, read-only, zero dependencies
+**[Claude Code](#supported-agents) · [Codex CLI](#supported-agents) · [Gemini CLI](#supported-agents) · [opencode](#supported-agents) · [OpenClaw](#supported-agents) · [Hermes Agent](#supported-agents)** — one normalized core, local, read-only, zero dependencies
 
 ```
 uvx agentburn
@@ -83,6 +83,7 @@ Optimizing a subscription doesn't change your bill. It changes how far you get b
   ```
 
   No cut-off in your logs yet? `--hit "2026-08-20 14:30"` names one by hand. A measured ceiling is remembered in `~/.agentburn/ceiling.json`, so the status line below knows it too.
+- **Codex: the provider's own reading.** Codex CLI writes `rate_limits.used_percent` next to every request. agentburn pairs each reading with your weighted usage of the same window and takes the median — a ceiling from the provider's arithmetic, not from a cut-off. Treat it as an estimate: that percentage counts every device and app on the account, while your local rollouts are only part of it.
 - **Time to wall.** Ceiling minus the current window, divided by the pace of the last half hour. The number you actually want while working.
 - **The week, too.** The heaviest rolling 7-day span, how much of it this week already is, and a weekly ceiling when Claude Code recorded a weekly cut-off.
 - **By project.** Sessions record their working directory; the peak window is split by it.
@@ -243,8 +244,11 @@ One normalized model, one adapter per agent. Run `agentburn` and every agent fou
 | **Claude Code** | ✅ | `~/.claude/projects/**.jsonl` | tokens and **windows**, by design: no local costs, no honest per-token price for a subscription |
 | **OpenClaw** | ✅ | `~/.openclaw/agents/*/sessions/sessions.json` | **heartbeat is its own category** — the famous one |
 | **Hermes Agent** | ✅ | `~/.hermes/state.db` (+ optional request dumps) | costs from the agent's own accounting |
+| **Codex CLI** | ✅ | `~/.codex/sessions/**/rollout-*.jsonl` | tokens and windows; the only agent that records the **provider's own usage %** with every request |
+| **Gemini CLI** | ✅ | `~/.gemini/tmp/*/chats/session-*.json` | per-turn tokens incl. thoughts; working directory via `projects.json` |
+| **opencode** | ✅ | `~/.local/share/opencode/opencode.db` | costs from the agent's own price list; free/self-hosted providers show tokens only |
 
-Adapters are ~150 lines over a shared model. Codex CLI / opencode are natural next targets — PRs welcome.
+Adapters are ~150 lines over a shared model — PRs for the next one welcome.
 
 <div align="center"><img src="assets/architecture.svg" alt="architecture: agent data → adapters → normalized model → report/limits/why/fix/explain/doctor/mcp" width="780"></div>
 

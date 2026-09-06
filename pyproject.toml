@@ -11,7 +11,7 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Ion" }]
 keywords = ["claude-code", "usage-limits", "tokens", "cost", "profiler", "ai-agents",
-            "hermes-agent", "openclaw", "mcp", "observability"]
+            "hermes-agent", "openclaw", "codex-cli", "gemini-cli", "opencode", "mcp", "observability"]
 classifiers = [
   "Environment :: Console",
   "Intended Audience :: Developers",

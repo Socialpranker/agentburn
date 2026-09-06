@@ -183,6 +183,15 @@ _AGENT_STORES = {
 }
 
 
+# Agents that record no prices at all (subscription or free tier): a session
+# without a cost there is the design, not an accounting gap.
+NO_LOCAL_COSTS = frozenset({"claude-code", "codex", "gemini"})
+
+
+def records_costs(agent: str) -> bool:
+    return agent_key(agent) not in NO_LOCAL_COSTS
+
+
 def agent_key(agent: str) -> str:
     """Bare adapter key. `behavior` may append ` · <project>` to Snapshot.agent."""
     return agent.split(" · ", 1)[0]

@@ -257,6 +257,20 @@ def main(argv=None) -> int:
             snap = filter_snapshot(snap, args.source)
         return snap
 
+    def load_all(names):
+        """One adapter failing (empty window, unreadable file) must not hide the others' reports."""
+        loaded, errors = [], []
+        for n in names:
+            try:
+                loaded.append((n, load(n)))
+            except (FileNotFoundError, RuntimeError) as e:
+                errors.append((n, e))
+        if not loaded:
+            raise errors[0][1]
+        for n, e in errors:
+            print(f"agentburn: {n}: {e} — skipped", file=sys.stderr)
+        return loaded
+
     try:
         if args.command == "doctor":
             from .doctor import render_doctor
@@ -269,7 +283,7 @@ def main(argv=None) -> int:
             from .burnindex import (INDEX_URL, build_metrics, load_index, rank_against,
                                     render_rank, submit_url)
 
-            snaps = [load(n) for n in found]
+            snaps = [sn for _, sn in load_all(found)]
             analyses = [analyze(s, night_window=args.night) for s in snaps]
             breps = [analyze_behavior(s) for s in snaps]
             from .limits import build_limits
@@ -296,7 +310,7 @@ def main(argv=None) -> int:
         if args.command == "drift":
             from .drift import TRENDS_URL, build_drift, load_trends, render_drift
 
-            analyses = [analyze(load(n), night_window=args.night) for n in found]
+            analyses = [analyze(sn, night_window=args.night) for _, sn in load_all(found)]
             try:
                 trends = load_trends(args.trends or TRENDS_URL)
             except RuntimeError as e:
@@ -368,9 +382,9 @@ def main(argv=None) -> int:
                                  save_ceiling, statusline)
 
             reports = []
-            for n in found:
+            for n, sn in load_all(found):
                 rep = build_limits(
-                    load(n), hit=args.hit, window_hours=args.window or 5.0,
+                    sn, hit=args.hit, window_hours=args.window or 5.0,
                     saved=load_saved_ceiling(n),
                 )
                 save_ceiling(n, rep)
@@ -392,7 +406,7 @@ def main(argv=None) -> int:
         if args.command == "context":
             from .context import build_context, context_json, render_context
 
-            reports = [build_context(load(n)) for n in found]
+            reports = [build_context(sn) for _, sn in load_all(found)]
             if args.json:
                 import json as _json
 
@@ -410,7 +424,7 @@ def main(argv=None) -> int:
             from .commits import build_commits, commits_json, render_commits
 
             since = _time.time() - args.days * 86400 if args.days else None
-            reports = [build_commits(load(n), since=since) for n in found]
+            reports = [build_commits(sn, since=since) for _, sn in load_all(found)]
             if args.json:
                 import json as _json
 
@@ -425,10 +439,12 @@ def main(argv=None) -> int:
         if args.command == "why":
             from .behavior import analyze_behavior, behavior_json, render_behavior
 
-            if len(found) > 1 and not args.json:
-                print(("\033[2m" if color else "") + f"Found {len(found)} agents: {', '.join(found)} — "
+            loaded = load_all(found)
+            if len(loaded) > 1 and not args.json:
+                names = [n for n, _ in loaded]
+                print(("\033[2m" if color else "") + f"Found {len(names)} agents: {', '.join(names)} — "
                       "one forensics report each." + ("\033[0m" if color else ""))
-            reports = [analyze_behavior(load(n)) for n in found]
+            reports = [analyze_behavior(sn) for _, sn in loaded]
             if args.json:
                 import json as _json
 
@@ -440,7 +456,9 @@ def main(argv=None) -> int:
                     print(render_behavior(r, color=color))
             return 0
 
-        snaps = [load(n) for n in found]
+        loaded = load_all(found)
+        found = [n for n, _ in loaded]
+        snaps = [sn for _, sn in loaded]
         analyses = [analyze(sn, night_window=args.night) for sn in snaps]
     except (FileNotFoundError, RuntimeError) as e:
         print(f"agentburn: {e}", file=sys.stderr)
