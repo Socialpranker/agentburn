@@ -17,7 +17,11 @@ PRICES = {
     "anthropic/claude-opus-4.8": (5.0, 25.0),
     "anthropic/claude-opus-5": (5.0, 25.0),
     "anthropic/claude-sonnet-4.6": (3.0, 15.0),
-    "anthropic/claude-sonnet-5": (3.0, 15.0),
+    # Sonnet 5: $3/$15 was correct at the 06-10 snapshot, but the planned
+    # step-up (2026-09-01) was cancelled on 2026-08-10 - $2/$10 is now the
+    # permanent standard rate (verified upstream via gortex#784->#786).
+    # Row updated 2026-09-18, postdates AS_OF on purpose.
+    "anthropic/claude-sonnet-5": (2.0, 10.0),
     "anthropic/claude-haiku-4.5": (1.0, 5.0),
     "anthropic/claude-fable-5": (10.0, 50.0),
     "deepseek/deepseek-chat": (0.32, 0.89),
