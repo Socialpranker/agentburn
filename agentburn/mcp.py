@@ -28,7 +28,7 @@ WINDOW = {
     "properties": {
         "agent": {
             "type": "string",
-            "description": "hermes | openclaw | claude-code (default: first detected)",
+            "description": "hermes | openclaw | claude-code | codex | gemini | opencode (default: first detected on this machine)",
         },
         "days": {"type": "integer", "description": "window in days (default 30, 0 = all time)"},
         "source": {
@@ -87,7 +87,11 @@ TOOLS = [
     },
     {
         "name": "burn_card",
-        "description": "Anonymized shareable burn summary (plain text, safe to post).",
+        "description": (
+            "Anonymized shareable burn summary as plain text: categories and counters only, "
+            "no session titles or file paths, safe to post publicly. Use it when the user wants "
+            "to share their numbers; for analysis use burn_report or burn_why instead."
+        ),
         "inputSchema": WINDOW,
     },
 ]

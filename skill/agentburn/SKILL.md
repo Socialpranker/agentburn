@@ -45,8 +45,8 @@ database read-only. Use it instead of guessing about costs.
 5. For one channel ("what did you do in telegram?"):
    add `--source telegram` (or cron / heartbeat / subagent / cli).
 6. Answer in the user's language, lead with the verdict
-   (pace + dominant source), quote at most 3 numbers, then the single
-   highest-impact change. Mark estimated costs with "~".
+   (pace + dominant source), cite only the numbers the verdict rests on,
+   then the single highest-impact change. Mark estimated costs with "~".
 
 ## Fixing things
 
