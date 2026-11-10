@@ -9,16 +9,22 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-AS_OF = "2026-06-10"
+AS_OF = "2026-10-28"
 
 # slug → (prompt_usd_per_mtok, completion_usd_per_mtok)
 PRICES = {
     "anthropic/claude-opus-4.6": (5.0, 25.0),
     "anthropic/claude-opus-4.8": (5.0, 25.0),
     "anthropic/claude-opus-5": (5.0, 25.0),
+    # explicit: prefix match would otherwise price opus-5.5 as opus-5
+    "anthropic/claude-opus-5.5": (4.0, 20.0),
+    "anthropic/claude-opus-5-5": (4.0, 20.0),
     "anthropic/claude-sonnet-4.6": (3.0, 15.0),
-    "anthropic/claude-sonnet-5": (3.0, 15.0),
+    "anthropic/claude-sonnet-5": (2.0, 10.0),
     "anthropic/claude-haiku-4.5": (1.0, 5.0),
+    # base rate (prompt <= 100K tokens)
+    "anthropic/claude-haiku-5.5": (0.10, 0.50),
+    "anthropic/claude-haiku-5-5": (0.10, 0.50),
     "anthropic/claude-fable-5": (10.0, 50.0),
     "deepseek/deepseek-chat": (0.32, 0.89),
     "deepseek/deepseek-v3.2": (0.269, 0.4),

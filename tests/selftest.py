@@ -931,9 +931,9 @@ def main():
     ok("limits: peak window found", lim.peak is not None and lim.peak.weight > 0)
     ok("limits: peak covers the burst, not the quiet hour",
        lim.peak.start <= burst_at + 600 and lim.peak.end >= burst_at)
-    # opus 10x(1000 in + 1000 out) = 10*(1.667 + 8.333)k = 100k; sub cache read 100k*0.1*1 = 10k
+    # opus 10x(1000 in + 1000 out) = 10*(2.5 + 12.5)k = 150k; sub cache read 100k*0.1*1 = 10k
     ok("limits: peak weight matches the arithmetic",
-       abs(lim.peak.weight - 110_000) < 1000, f"{lim.peak.weight:,.0f}")
+       abs(lim.peak.weight - 160_000) < 1000, f"{lim.peak.weight:,.0f}")
     ok("limits: peak split by source includes the subagent",
        any(src == "subagent" for src, _ in lim.peak_by_source))
     ok("limits: typical window is the median of active slots, below the peak",
